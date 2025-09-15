@@ -10,6 +10,10 @@ dev-debug.log
 node_modules/
 # Environment variables
 .env
+*.env
+.env.*
+!.env.example
+!.env.sample
 # Editor directories and files
 .idea
 *.suo
@@ -70,6 +74,13 @@ project-root/backend/docs/
 
 # Frontend environment files
 project-root/frontend/.env.local
+
+# Backend environment files (CRITICAL - contains passwords!)
+project-root/backend/.env
+!project-root/backend/.env.example
+
+# Database directory (temporary - will be replaced with blockchain later)
+project-root/backend/src/db/
 
 # Test files/directories
 project-root/backend/test-project/
