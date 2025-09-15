@@ -1,0 +1,78 @@
+
+# Logs
+logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+dev-debug.log
+# Dependency directories
+node_modules/
+# Environment variables
+.env
+# Editor directories and files
+.idea
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+
+# OS specific
+.DS_Store
+Thumbs.db
+
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.Python
+*.so
+.pytest_cache/
+.coverage
+htmlcov/
+.tox/
+venv/
+env/
+ENV/
+
+# JavaScript/Node.js
+dist/
+build/
+coverage/
+.nyc_output
+.cache/
+.parcel-cache/
+.next/
+
+# Task Master
+.taskmaster
+taskmaster/
+
+# Rules file (generated)
+.rules
+
+# Personal AI assistant configs
+CLAUDE.md
+.claude/
+.cursor/
+.mcp.json
+
+
+.github
+github/
+
+.vscode/
+
+# Backend documentation (personal portfolio docs)
+project-root/backend/docs/
+
+# Frontend environment files
+project-root/frontend/.env.local
+
+# Test files/directories
+project-root/backend/test-project/
+project-root/backend/test-file.js
+project-root/backend/test-upload.js
+project-root/backend/test-project.zip
