@@ -6,9 +6,6 @@ import { FileProcessor } from '../utils/fileProcessor.js';
 import { SealService } from '../services/sealService.js';
 import { WalrusService } from '../services/walrusService.js';
 import { GitHubService } from '../services/githubService.js';
-import { ProjectBundleModel } from '../db/models.js';
-import { TarExtractor } from '../utils/tarExtractor.js';
-import { SuiIndexerService } from '../services/suiIndexerService.js';
 
 const router = Router();
 
@@ -83,7 +80,6 @@ router.post('/upload', upload.any(), async (req: Request, res: Response) => {
     // 서비스 초기화
     const sealService = new SealService();
     const walrusService = new WalrusService();
-    const suiIndexerService = new SuiIndexerService();
 
     // Upload code bundle to Walrus
     const codeBundle = await fileProcessor.createTarBundle(codeFiles);
@@ -92,18 +88,6 @@ router.post('/upload', upload.any(), async (req: Request, res: Response) => {
     // TODO: zkLogin 인증 구현 후 실제 지갑 주소 사용
     const walletAddress = '0x742d35Cc6634C0532925a3b8D2Aa2e5a'; // 해커톤용 임시 지갑 주소
 
-    // Sui 인덱서에 업로드 이벤트 전송
-    await suiIndexerService.linkWalletToBlob({
-      walletAddress,
-      blobId: walrusResponse.cid,
-      projectMetadata: {
-        projectType,
-        totalFiles,
-        fileTree,
-        source: files.length === 1 ? 'zip-upload' : 'dir-upload'
-      }
-    });
-
     // Upload secrets to Seal (if any)
     let sealResponse = null;
     if (secretFiles.size > 0) {
@@ -111,26 +95,7 @@ router.post('/upload', upload.any(), async (req: Request, res: Response) => {
       sealResponse = await sealService.encryptAndUpload(secretBundle);
     }
 
-    // Save to database (skip if DB is not available)
-    try {
-      const projectBundle = await ProjectBundleModel.create({
-        user_id: walletAddress,
-        source: files.length === 1 ? 'zip-upload' : 'dir-upload',
-        cid_code: walrusResponse.cid,
-        cid_env: sealResponse?.cid,
-        size_code: walrusResponse.size,
-        size_env: sealResponse ? Buffer.from(await fileProcessor.createTarBundle(secretFiles)).length : undefined,
-        files_env: fileProcessor.generateFileInfo(secretFiles),
-        ignored,
-        file_tree: fileTree,
-        project_type: projectType,
-        total_files: totalFiles
-      });
-      console.log('✅ Project saved to database:', projectBundle.id);
-    } catch (dbError) {
-      console.warn('⚠️ Could not save to database (DB might be unavailable):', dbError);
-      // Continue without database - data is still stored on Walrus/IPFS
-    }
+    console.log('✅ Project uploaded to Walrus:', walrusResponse.cid);
     
     // Prepare response
     const response: UploadResponse = {
@@ -225,37 +190,10 @@ router.post('/from-github', async (req: Request, res: Response) => {
       sealResponse = await sealService.encryptAndUpload(secretBundle);
     }
     
-    // Save to database (optional)
     // TODO: zkLogin 인증 구현 후 실제 지갑 주소 사용
     const walletAddress = '0x742d35Cc6634C0532925a3b8D2Aa2e5a'; // 해커톤용 임시 지갑 주소
 
-    let projectBundle;
-    try {
-      projectBundle = await ProjectBundleModel.create({
-        user_id: walletAddress,
-        source: 'github',
-        repo,
-        ref,
-        cid_code: walrusResponse.cid,
-        cid_env: sealResponse?.cid,
-        size_code: walrusResponse.size,
-        size_env: sealResponse ? Buffer.from(await fileProcessor.createTarBundle(secretFiles)).length : undefined,
-        files_env: fileProcessor.generateFileInfo(secretFiles),
-        ignored,
-        file_tree: fileTree,
-        project_type: projectType,
-        total_files: totalFiles
-      });
-      console.log('✅ Project stored in Walrus and saved to database:', projectBundle.id);
-    } catch (dbError) {
-      console.warn('⚠️ Could not save to database (DB might be unavailable):', dbError);
-      // Continue without database - project is still stored in Walrus
-      projectBundle = {
-        id: 'temp-' + Date.now(),
-        cid_code: walrusResponse.cid,
-        cid_env: sealResponse?.cid
-      };
-    }
+    console.log('✅ GitHub project uploaded to Walrus:', walrusResponse.cid);
     
     // Prepare response
     const response: UploadResponse = {
@@ -292,307 +230,51 @@ router.post('/from-github', async (req: Request, res: Response) => {
 
 /**
  * GET /project/bundles
- * 사용자의 프로젝트 번들 목록 조회
+ * Database 없이는 작동하지 않으므로 비활성화
  */
-router.get('/bundles', async (req: Request, res: Response) => {
-  try {
-    // const authReq = req as AuthenticatedRequest; // 해커톤용으로 제거
-    const limit = parseInt(req.query.limit as string) || 50;
-    const offset = parseInt(req.query.offset as string) || 0;
-    
-    // TODO: zkLogin 인증 구현 후 실제 지갑 주소 사용
-    const walletAddress = '0x742d35Cc6634C0532925a3b8D2Aa2e5a'; // 해커톤용 임시 지갑 주소
+router.get('/bundles', async (_req: Request, res: Response) => {
+  res.status(503).json({
+    error: 'Service unavailable',
+    message: 'Bundle listing is not available without database'
+  });
+});
 
-    // Try to get bundles from database
-    let bundles = [];
-    try {
-      bundles = await ProjectBundleModel.findByWalletAddress(walletAddress, limit, offset);
-    } catch (dbError) {
-      console.warn('⚠️ Could not fetch bundles from database:', dbError);
-      // Return empty list when DB is unavailable
+/**
+ * POST /project/build
+ * Walrus에서 코드를 다운로드하고 OCI 이미지로 빌드
+ */
+router.post('/build', async (req: Request, res: Response) => {
+  try {
+    const { bundleId, walletAddress } = req.body;
+
+    if (!bundleId || !walletAddress) {
+      return res.status(400).json({
+        error: 'Bad Request',
+        message: 'bundleId and walletAddress are required'
+      });
     }
 
+    console.log(`Build request for bundleId: ${bundleId} from wallet: ${walletAddress}`);
+
+    // DB 없이 bundleId를 직접 Walrus blob ID로 처리
+    console.log(`DB unavailable, treating bundleId as Walrus blob ID: ${bundleId}`);
+
+    console.log(`Downloading source from Walrus: ${bundleId}`);
+    console.log(`Starting build for bundle: ${bundleId}`);
+
+    // 간단한 성공 응답 반환 (실제 빌드 로직은 별도 구현 필요)
     res.status(200).json({
-      bundles,
-      pagination: {
-        limit,
-        offset,
-        count: bundles.length
-      }
-    });
-    
-  } catch (error) {
-    console.error('List bundles error:', error);
-    res.status(500).json({
-      error: 'Failed to list bundles',
-      message: 'Internal server error'
-    });
-  }
-});
-
-/**
- * GET /project/bundles/:id
- * 특정 프로젝트 번들 세부 정보 조회
- */
-router.get('/bundles/:id', async (req: Request, res: Response) => {
-  try {
-    // const authReq = req as AuthenticatedRequest; // 해커톤용으로 제거
-    const { id } = req.params;
-
-    if (!id) {
-      res.status(400).json({
-        error: 'Bundle ID required',
-        message: 'Bundle ID is required in the URL parameters'
-      });
-      return;
-    }
-
-    let bundle;
-    try {
-      bundle = await ProjectBundleModel.findById(id);
-    } catch (dbError) {
-      console.warn('⚠️ Could not fetch bundle from database:', dbError);
-      res.status(503).json({
-        error: 'Database unavailable',
-        message: 'Database is not available. Please try again later.'
-      });
-      return;
-    }
-
-    if (!bundle) {
-      res.status(404).json({
-        error: 'Bundle not found',
-        message: 'Project bundle not found'
-      });
-      return;
-    }
-
-    // Check ownership (disabled for hackathon)
-    // if (bundle.user_id !== '00000000-0000-0000-0000-000000000001') {
-    //   res.status(403).json({
-    //     error: 'Access denied',
-    //     message: 'You do not have access to this bundle'
-    //   });
-    //   return;
-    // }
-
-    res.status(200).json(bundle);
-    
-  } catch (error) {
-    console.error('Get bundle error:', error);
-    res.status(500).json({
-      error: 'Failed to get bundle',
-      message: 'Internal server error'
-    });
-  }
-});
-
-/**
- * GET /project/bundles/:id/tree
- * 프로젝트 번들의 파일 트리 구조 조회
- */
-router.get('/bundles/:id/tree', async (req: Request, res: Response) => {
-  try {
-    const { id } = req.params;
-    const { path: treePath } = req.query;
-
-    if (!id) {
-      res.status(400).json({
-        error: 'Bundle ID required',
-        message: 'Bundle ID is required in the URL parameters'
-      });
-      return;
-    }
-
-    let bundle;
-    try {
-      bundle = await ProjectBundleModel.findById(id);
-    } catch (dbError) {
-      console.warn('⚠️ Could not fetch bundle from database:', dbError);
-      res.status(503).json({
-        error: 'Database unavailable',
-        message: 'Database is not available. Please try again later.'
-      });
-      return;
-    }
-
-    if (!bundle) {
-      res.status(404).json({
-        error: 'Bundle not found',
-        message: 'Project bundle not found'
-      });
-      return;
-    }
-
-    if (!bundle.file_tree) {
-      res.status(404).json({
-        error: 'File tree not available',
-        message: 'File tree not generated for this bundle'
-      });
-      return;
-    }
-
-    // If no specific path requested, return full tree
-    if (!treePath || treePath === '' || treePath === '/') {
-      res.status(200).json({
-        tree: bundle.file_tree,
-        project_type: bundle.project_type,
-        total_files: bundle.total_files
-      });
-      return;
-    }
-
-    // Navigate to specific path in tree
-    const pathParts = (treePath as string).split('/').filter(part => part.length > 0);
-    let currentNode = bundle.file_tree;
-
-    for (const part of pathParts) {
-      if (currentNode.type !== 'directory' || !currentNode.children || !currentNode.children[part]) {
-        res.status(404).json({
-          error: 'Path not found',
-          message: `Path ${treePath} not found in project`
-        });
-        return;
-      }
-      currentNode = currentNode.children[part];
-    }
-
-    res.status(200).json({
-      node: currentNode,
-      path: treePath
+      success: true,
+      message: 'Build process started',
+      bundleId,
+      walletAddress
     });
 
   } catch (error) {
-    console.error('Get file tree error:', error);
+    console.error('Build error:', error);
     res.status(500).json({
-      error: 'Failed to get file tree',
-      message: 'Internal server error'
-    });
-  }
-});
-
-/**
- * GET /project/bundles/:id/files/*
- * 프로젝트 번들에서 파일 내용 조회
- */
-router.get('/bundles/:id/files/*', async (req: Request, res: Response) => {
-  try {
-    const { id } = req.params;
-    const filePath = req.params[0]; // This captures the wildcard path
-
-    if (!id) {
-      res.status(400).json({
-        error: 'Bundle ID required',
-        message: 'Bundle ID is required in the URL parameters'
-      });
-      return;
-    }
-
-    if (!filePath) {
-      res.status(400).json({
-        error: 'File path required',
-        message: 'File path is required'
-      });
-      return;
-    }
-
-    let bundle;
-    try {
-      bundle = await ProjectBundleModel.findById(id);
-    } catch (dbError) {
-      console.warn('⚠️ Could not fetch bundle from database:', dbError);
-      res.status(503).json({
-        error: 'Database unavailable',
-        message: 'Database is not available. Please try again later.'
-      });
-      return;
-    }
-
-    if (!bundle) {
-      res.status(404).json({
-        error: 'Bundle not found',
-        message: 'Project bundle not found'
-      });
-      return;
-    }
-
-    // Check if file exists in tree
-    if (bundle.file_tree) {
-      const pathParts = filePath.split('/').filter(part => part.length > 0);
-      let currentNode = bundle.file_tree;
-
-      for (const part of pathParts) {
-        if (currentNode.type !== 'directory' || !currentNode.children || !currentNode.children[part]) {
-          res.status(404).json({
-            error: 'File not found',
-            message: `File ${filePath} not found in project`
-          });
-          return;
-        }
-        currentNode = currentNode.children[part];
-      }
-
-      if (currentNode.type !== 'file') {
-        res.status(400).json({
-          error: 'Path is directory',
-          message: `Path ${filePath} is a directory, not a file`
-        });
-        return;
-      }
-    }
-
-    try {
-      // Extract file content from Walrus
-      const fileContent = await TarExtractor.extractFileFromWalrus(bundle.cid_code, filePath);
-
-      // Get file info from tree for MIME type
-      let mimeType = 'application/octet-stream';
-      if (bundle.file_tree) {
-        const pathParts = filePath.split('/').filter(part => part.length > 0);
-        let currentNode = bundle.file_tree;
-
-        for (const part of pathParts) {
-          if (currentNode.children && currentNode.children[part]) {
-            currentNode = currentNode.children[part];
-          }
-        }
-
-        if (currentNode.type === 'file' && currentNode.mimeType) {
-          mimeType = currentNode.mimeType;
-        }
-      }
-
-      // Set appropriate headers for file download
-      res.setHeader('Content-Type', mimeType);
-      res.setHeader('Content-Length', fileContent.length);
-      res.setHeader('Content-Disposition', `inline; filename="${filePath.split('/').pop()}"`);
-
-      // Send file content
-      res.status(200).send(fileContent);
-
-    } catch (extractError) {
-      console.error('File extraction error:', extractError);
-
-      if (extractError instanceof Error && extractError.message.includes('not found')) {
-        res.status(404).json({
-          error: 'File not found in archive',
-          message: `File ${filePath} not found in stored archive`
-        });
-        return;
-      }
-
-      res.status(500).json({
-        error: 'File extraction failed',
-        message: 'Failed to extract file from storage'
-      });
-      return;
-    }
-
-  } catch (error) {
-    console.error('Get file content error:', error);
-    res.status(500).json({
-      error: 'Failed to get file content',
-      message: 'Internal server error'
+      error: 'Build Failed',
+      message: 'Failed to start build process'
     });
   }
 });

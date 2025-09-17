@@ -7,11 +7,6 @@ export const config: Config = {
   port: parseInt(process.env.PORT || '3000', 10),
   nodeEnv: process.env.NODE_ENV || 'development',
   
-  // Database
-  database: {
-    url: process.env.DATABASE_URL || 'postgres://user:pass@localhost:5432/daas'
-  },
-  
   // Authentication
   auth: {
     devAdminToken: process.env.DEV_ADMIN_TOKEN || 'dev-allow',

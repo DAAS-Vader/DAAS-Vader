@@ -107,9 +107,6 @@ export interface AuthenticatedRequest extends Request {
 export interface Config {
   port: number;
   nodeEnv: string;
-  database: {
-    url: string;
-  };
   auth: {
     devAdminToken: string;
     sessionSecret: string;

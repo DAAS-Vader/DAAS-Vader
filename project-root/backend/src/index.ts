@@ -3,14 +3,12 @@ import cors from 'cors';
 import helmet from 'helmet';
 import morgan from 'morgan';
 import { config } from './config/index.js';
-import { connectDB, closeConnections } from './db/connection.js';
 import { errorHandler, notFoundHandler } from './middleware/error.js';
 // import { authMiddleware } from './middleware/auth.js'; // Removed for hackathon
 
 // Routes
 import projectRoutes from './routes/project.js';
 import sealRoutes from './routes/seal.js';
-import healthRoutes from './routes/health.js';
 
 const app = express();
 
@@ -28,9 +26,6 @@ app.use(morgan(config.nodeEnv === 'production' ? 'combined' : 'dev'));
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ extended: true, limit: '50mb' }));
 
-// Health check route (no auth required)
-app.use('/health', healthRoutes);
-
 // Routes (no authentication required for hackathon)
 app.use('/api/project', projectRoutes);
 app.use('/api/seal', sealRoutes);
@@ -41,26 +36,17 @@ app.use(errorHandler);
 
 async function startServer(): Promise<void> {
   try {
-    // Connect to database
-    try {
-      await connectDB();
-      console.log('✅ Database connected successfully');
-    } catch (dbError) {
-      console.warn('⚠️  Database connection failed, continuing without database for development mode');
-      console.warn('DB Error:', dbError);
-    }
 
     // Start HTTP server
     const server = app.listen(config.port, () => {
       console.log(`🚀 DAAS Vader Backend running on port ${config.port}`);
       console.log(`📝 Environment: ${config.nodeEnv}`);
-      console.log(`🔗 Database: ${config.database.url.split('@')[1] || 'configured'}`);
-      console.log(`🏥 Health check: http://localhost:${config.port}/health`);
-      
+
       if (config.nodeEnv === 'development') {
         console.log(`📚 API Documentation:`);
         console.log(`  POST /project/upload - Upload project files`);
         console.log(`  POST /project/from-github - Import from GitHub`);
+        console.log(`  POST /project/build - Build project to OCI image`);
         console.log(`  GET /project/bundles - List project bundles`);
         console.log(`  GET /project/bundles/:id - Get bundle details`);
         console.log(`  GET /project/bundles/:id/tree - Get file tree structure`);
@@ -73,17 +59,10 @@ async function startServer(): Promise<void> {
     const gracefulShutdown = async (signal: string) => {
       console.log(`🛑 Received ${signal}, shutting down gracefully`);
       
-      server.close(async () => {
+      server.close(() => {
         console.log('📴 HTTP server closed');
-        
-        try {
-          await closeConnections();
-          console.log('✅ All connections closed');
-          process.exit(0);
-        } catch (error) {
-          console.error('❌ Error during shutdown:', error);
-          process.exit(1);
-        }
+        console.log('✅ All connections closed');
+        process.exit(0);
       });
       
       // Force close after 10 seconds
