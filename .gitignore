@@ -102,6 +102,7 @@ pip-delete-this-directory.txt
 .github/copilot/
 .mcp.json
 CLAUDE.md
+screenshot/
 
 # ───────────────────────────────────────────────────────────────
 # Task Master 설정
