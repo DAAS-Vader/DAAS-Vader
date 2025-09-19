@@ -4,6 +4,7 @@ export interface WalletInfo {
   address: string
   balance: number
   provider: 'sui' | 'martian' | 'suiet'
+  authSignature?: string // For API authentication
 }
 
 // 워커노드 관련 타입

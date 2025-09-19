@@ -158,6 +158,7 @@ export default function Home() {
               '.php', '.rb', '.kt', '.swift', '.dart', '.vue', '.svelte'
             ]}
             backendUrl={process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:3001'}
+            walletInfo={walletInfo}
           />
         )
 

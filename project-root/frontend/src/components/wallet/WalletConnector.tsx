@@ -16,6 +16,7 @@ import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { WalletInfo } from '@/types'
+import { useWallet } from '@suiet/wallet-kit'
 
 interface WalletConnectorProps {
   onConnect: (wallet: WalletInfo) => void
@@ -39,6 +40,42 @@ const WalletConnector: React.FC<WalletConnectorProps> = ({
   const [isConnecting, setIsConnecting] = useState(false)
   const [connectionError, setConnectionError] = useState<string | null>(null)
   const [copiedAddress, setCopiedAddress] = useState(false)
+
+  // Use Suiet wallet hook for real wallet integration
+  const {
+    wallet,
+    connected,
+    connecting,
+    connect,
+    disconnect,
+    signMessage,
+    getBalance
+  } = useWallet()
+
+  // Generate authentication signature for API calls
+  const generateAuthSignature = async (walletAddress: string): Promise<string | null> => {
+    try {
+      const timestamp = Date.now()
+      const message = `DaaS Authentication\nTimestamp: ${timestamp}\nWallet: ${walletAddress}`
+
+      const signatureResult = await signMessage({
+        message: new TextEncoder().encode(message)
+      })
+
+      const authData = {
+        walletAddress,
+        signature: signatureResult.signature,
+        message,
+        timestamp
+      }
+
+      return JSON.stringify(authData)
+    } catch (error) {
+      console.error('Failed to generate auth signature:', error)
+      setConnectionError('지갑 서명 생성에 실패했습니다.')
+      return null
+    }
+  }
 
   const supportedWallets: SupportedWallet[] = [
     {
@@ -69,29 +106,59 @@ const WalletConnector: React.FC<WalletConnectorProps> = ({
     setConnectionError(null)
 
     try {
-      // 실제로는 각 지갑의 API를 사용해야 함
-      // 여기서는 Mock 데이터로 구현
-      await new Promise(resolve => setTimeout(resolve, 2000)) // 연결 시뮬레이션
-
-      // Mock wallet connection
-      const mockWallet: WalletInfo = {
-        connected: true,
-        address: '0x742d35Cc6634C0532925a3b8D2Aa2e5a8b3f4c1d',
-        balance: 125.45,
-        provider: walletType
-      }
-
-      onConnect(mockWallet)
+      // Connect to the actual wallet
+      await connect(walletType)
     } catch (error) {
+      console.error('Wallet connection failed:', error)
       setConnectionError(`${walletType} 지갑 연결에 실패했습니다.`)
-    } finally {
       setIsConnecting(false)
     }
   }
 
-  const disconnectWallet = () => {
-    onDisconnect()
-    setConnectionError(null)
+  // Effect to handle wallet connection state changes
+  useEffect(() => {
+    const handleWalletConnection = async () => {
+      if (connected && wallet && wallet.address) {
+        try {
+          // Get wallet balance
+          const balance = await getBalance()
+          const suiBalance = balance ? parseFloat(balance.totalBalance) / 1000000000 : 0 // Convert from MIST to SUI
+
+          // Generate auth signature for API calls
+          const authSignature = await generateAuthSignature(wallet.address)
+
+          const walletInfo: WalletInfo = {
+            connected: true,
+            address: wallet.address,
+            balance: suiBalance,
+            provider: wallet.name?.toLowerCase() as 'sui' | 'martian' | 'suiet' || 'sui',
+            authSignature
+          }
+
+          onConnect(walletInfo)
+          setIsConnecting(false)
+        } catch (error) {
+          console.error('Failed to initialize wallet:', error)
+          setConnectionError('지갑 초기화에 실패했습니다.')
+          setIsConnecting(false)
+        }
+      } else if (!connected && !connecting) {
+        setIsConnecting(false)
+      }
+    }
+
+    handleWalletConnection()
+  }, [connected, wallet, connecting])
+
+  const disconnectWallet = async () => {
+    try {
+      await disconnect()
+      onDisconnect()
+      setConnectionError(null)
+    } catch (error) {
+      console.error('Failed to disconnect wallet:', error)
+      setConnectionError('지갑 연결 해제에 실패했습니다.')
+    }
   }
 
   const copyAddress = async () => {
