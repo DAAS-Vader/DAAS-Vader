@@ -65,22 +65,7 @@ export function errorHandler(
     return;
   }
 
-  // Database errors
-  if (hasErrorCode(error) && error.code === '23505') { // PostgreSQL unique violation
-    res.status(409).json({
-      error: 'Conflict',
-      message: 'Resource already exists'
-    });
-    return;
-  }
-
-  if (hasErrorCode(error) && error.code === '23503') { // PostgreSQL foreign key violation
-    res.status(400).json({
-      error: 'Invalid Reference',
-      message: 'Referenced resource does not exist'
-    });
-    return;
-  }
+  // 데이터베이스 에러 핸들링은 제거됨
 
   // Network/timeout errors
   if (hasErrorCode(error) && (error.code === 'ECONNREFUSED' || error.code === 'ENOTFOUND')) {

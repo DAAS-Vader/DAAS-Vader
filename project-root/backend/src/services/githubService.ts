@@ -50,7 +50,10 @@ export class GitHubService {
       
       const response = await axios.get(tarballUrl, {
         responseType: 'stream',
-        headers: this.octokit.rest.repos.downloadTarball.endpoint.DEFAULTS.headers,
+        headers: {
+          'Accept': 'application/vnd.github.v3+json',
+          'User-Agent': 'DAAS-Vader/1.0'
+        },
         timeout: config.limits.requestTimeout
       });
       
@@ -84,7 +87,7 @@ export class GitHubService {
         throw new ServiceError(`GitHub API error: ${message}`, status);
       }
       
-      throw new ServiceError(`GitHub service error: ${error.message}`, 502);
+      throw new ServiceError(`GitHub service error: ${error instanceof Error ? error.message : 'Unknown error'}`, 502);
     }
   }
   
@@ -116,7 +119,7 @@ export class GitHubService {
         // Collect file data
         const chunks: Buffer[] = [];
         
-        stream.on('data', (chunk) => {
+        stream.on('data', (chunk: Buffer) => {
           chunks.push(chunk);
         });
         
@@ -135,7 +138,7 @@ export class GitHubService {
           next();
         });
         
-        stream.on('error', (err) => {
+        stream.on('error', (err: any) => {
           reject(new ServiceError(`Error processing file ${filePath}: ${err.message}`, 500));
         });
       });
@@ -272,7 +275,8 @@ export class GitHubService {
       return response.data.default_branch || 'main';
       
     } catch (error) {
-      throw new ServiceError(`Failed to get repository info: ${error.message}`, 502);
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      throw new ServiceError(`Failed to get repository info: ${errorMessage}`, 502);
     }
   }
 }
