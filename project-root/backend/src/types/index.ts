@@ -1,30 +1,4 @@
-// Database Models
-export interface ProjectBundle {
-  id: string;
-  user_id: string; // 이제 지갑 주소가 직접 저장됨
-  source: 'dir-upload' | 'zip-upload' | 'github';
-  repo?: string;
-  ref?: string;
-  cid_code: string;
-  cid_env?: string;
-  size_code: number;
-  size_env?: number;
-  files_env: FileInfo[];
-  ignored: string[];
-  file_tree?: FileTreeNode;
-  project_type?: string;
-  total_files?: number;
-  created_at: Date;
-}
-
-// User 인터페이스는 더 이상 필요하지 않음 - 지갑 주소를 직접 사용
-
-export interface GitHubInstallation {
-  installation_id: number;
-  user_id: string; // 이제 지갑 주소가 직접 저장됨
-  account_login: string;
-  created_at: Date;
-}
+// 데이터베이스 모델들은 제거됨 - stateless 아키텍처 사용
 
 // API Types
 export interface FileInfo {
@@ -103,6 +77,14 @@ export interface AuthenticatedRequest extends Request {
   walletAddress: string; // 지갑 주소로 변경
 }
 
+// Authentication Types
+export interface WalletAuthRequest {
+  walletAddress: string;
+  signature: string;
+  message: string;
+  timestamp: number;
+}
+
 // Configuration Types
 export interface Config {
   port: number;
@@ -117,8 +99,11 @@ export interface Config {
     ticketSecret: string;
   };
   walrus: {
-    publisher: string;
-    aggregator: string;
+    // SDK configuration
+    useSDK?: boolean;
+    network?: string;
+    keypairSeed?: string;
+    walCoinType?: string;
   };
   github: {
     appId?: string;

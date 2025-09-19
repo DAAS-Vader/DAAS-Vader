@@ -21,8 +21,11 @@ export const config: Config = {
   },
   
   walrus: {
-    publisher: process.env.WALRUS_PUBLISHER || 'https://publisher.walrus-testnet.walrus.space',
-    aggregator: process.env.WALRUS_AGGREGATOR || 'https://aggregator.walrus-testnet.walrus.space'
+    // SDK configuration
+    useSDK: process.env.USE_WALRUS_SDK === 'true',
+    network: process.env.WALRUS_NETWORK || 'testnet',
+    keypairSeed: process.env.WALRUS_KEYPAIR_SEED,
+    walCoinType: process.env.WALRUS_WAL_COIN_TYPE
   },
   
   // GitHub App
