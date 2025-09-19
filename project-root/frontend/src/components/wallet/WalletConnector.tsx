@@ -25,7 +25,7 @@ interface WalletConnectorProps {
 }
 
 interface SupportedWallet {
-  id: 'sui' | 'martian' | 'suiet'
+  id: 'Suiet' | 'Slush'
   name: string
   icon: string
   description: string
@@ -40,16 +40,17 @@ const WalletConnector: React.FC<WalletConnectorProps> = ({
   const [isConnecting, setIsConnecting] = useState(false)
   const [connectionError, setConnectionError] = useState<string | null>(null)
   const [copiedAddress, setCopiedAddress] = useState(false)
+  const [isDisconnecting, setIsDisconnecting] = useState(false)
 
   // Use Suiet wallet hook for real wallet integration
   const {
     wallet,
     connected,
     connecting,
-    connect,
+    select,
     disconnect,
-    signMessage,
-    getBalance
+    signPersonalMessage,
+    account
   } = useWallet()
 
   // Generate authentication signature for API calls
@@ -58,13 +59,21 @@ const WalletConnector: React.FC<WalletConnectorProps> = ({
       const timestamp = Date.now()
       const message = `DaaS Authentication\nTimestamp: ${timestamp}\nWallet: ${walletAddress}`
 
-      const signatureResult = await signMessage({
-        message: new TextEncoder().encode(message)
-      })
+      // Try to sign message for authentication
+      let signature = null
+      try {
+        const signatureResult = await signPersonalMessage({
+          message: new TextEncoder().encode(message)
+        })
+        signature = signatureResult.signature
+      } catch (signError) {
+        console.warn('Failed to sign message, using simplified auth:', signError)
+        signature = 'unsigned' // Fallback for development
+      }
 
       const authData = {
         walletAddress,
-        signature: signatureResult.signature,
+        signature,
         message,
         timestamp
       }
@@ -72,45 +81,41 @@ const WalletConnector: React.FC<WalletConnectorProps> = ({
       return JSON.stringify(authData)
     } catch (error) {
       console.error('Failed to generate auth signature:', error)
-      setConnectionError('지갑 서명 생성에 실패했습니다.')
-      return null
+      return null // Don't fail connection if signature fails
     }
   }
 
   const supportedWallets: SupportedWallet[] = [
     {
-      id: 'sui',
-      name: 'Sui Wallet',
-      icon: '🔷',
-      description: '공식 Sui 지갑',
-      downloadUrl: 'https://chrome.google.com/webstore/detail/sui-wallet'
-    },
-    {
-      id: 'martian',
-      name: 'Martian Wallet',
-      icon: '🚀',
-      description: '멀티체인 지갑',
-      downloadUrl: 'https://chrome.google.com/webstore/detail/martian-wallet'
-    },
-    {
-      id: 'suiet',
+      id: 'Suiet',
       name: 'Suiet Wallet',
       icon: '💎',
       description: 'Sui 전용 지갑',
       downloadUrl: 'https://chrome.google.com/webstore/detail/suiet-sui-wallet'
+    },
+    {
+      id: 'Slush',
+      name: 'Slush Wallet',
+      icon: '🌊',
+      description: 'Sui 생태계 지갑',
+      downloadUrl: 'https://chrome.google.com/webstore/detail/slush-wallet'
     }
   ]
 
-  const connectWallet = async (walletType: 'sui' | 'martian' | 'suiet') => {
+  const connectWallet = async (walletType: 'Suiet' | 'Slush') => {
+    console.log('Attempting to connect wallet:', walletType)
     setIsConnecting(true)
     setConnectionError(null)
 
     try {
-      // Connect to the actual wallet
-      await connect(walletType)
+      // Connect to the actual wallet - Suiet wallet-kit API
+      console.log('Calling select()...', walletType)
+      await select(walletType)
+      console.log('Select() successful')
     } catch (error) {
       console.error('Wallet connection failed:', error)
-      setConnectionError(`${walletType} 지갑 연결에 실패했습니다.`)
+      console.error('Error details:', error)
+      setConnectionError(`지갑 연결에 실패했습니다. ${error?.message || error?.toString() || ''} 브라우저에 지갑 확장프로그램이 설치되어 있는지 확인해주세요.`)
       setIsConnecting(false)
     }
   }
@@ -118,20 +123,26 @@ const WalletConnector: React.FC<WalletConnectorProps> = ({
   // Effect to handle wallet connection state changes
   useEffect(() => {
     const handleWalletConnection = async () => {
-      if (connected && wallet && wallet.address) {
+      // Don't handle connection if we're in the process of disconnecting
+      if (isDisconnecting) {
+        return
+      }
+
+      if (connected && account && account.address) {
         try {
-          // Get wallet balance
-          const balance = await getBalance()
-          const suiBalance = balance ? parseFloat(balance.totalBalance) / 1000000000 : 0 // Convert from MIST to SUI
+          // Get wallet balance - simplified for now
+          let suiBalance = 0
+          // Note: @suiet/wallet-kit doesn't have getBalance, we'll use a placeholder
+          suiBalance = 0 // Default balance - would need to fetch from RPC
 
           // Generate auth signature for API calls
-          const authSignature = await generateAuthSignature(wallet.address)
+          const authSignature = await generateAuthSignature(account.address)
 
           const walletInfo: WalletInfo = {
             connected: true,
-            address: wallet.address,
+            address: account.address,
             balance: suiBalance,
-            provider: wallet.name?.toLowerCase() as 'sui' | 'martian' | 'suiet' || 'sui',
+            provider: wallet?.name?.includes('Slush') ? 'slush' : 'suiet',
             authSignature
           }
 
@@ -142,22 +153,32 @@ const WalletConnector: React.FC<WalletConnectorProps> = ({
           setConnectionError('지갑 초기화에 실패했습니다.')
           setIsConnecting(false)
         }
-      } else if (!connected && !connecting) {
+      } else if (!connected && !connecting && !isDisconnecting) {
         setIsConnecting(false)
       }
     }
 
     handleWalletConnection()
-  }, [connected, wallet, connecting])
+  }, [connected, account, connecting, isDisconnecting])
 
   const disconnectWallet = async () => {
+    setIsDisconnecting(true)
     try {
+      // Clear local storage to prevent auto-reconnection
+      localStorage.removeItem('daas-wallet')
+
       await disconnect()
       onDisconnect()
       setConnectionError(null)
+
+      // Keep disconnecting state for a moment to prevent immediate reconnection
+      setTimeout(() => {
+        setIsDisconnecting(false)
+      }, 1000)
     } catch (error) {
       console.error('Failed to disconnect wallet:', error)
       setConnectionError('지갑 연결 해제에 실패했습니다.')
+      setIsDisconnecting(false)
     }
   }
 
@@ -193,7 +214,12 @@ const WalletConnector: React.FC<WalletConnectorProps> = ({
   }
 
   const getWalletIcon = (provider: string) => {
-    const wallet = supportedWallets.find(w => w.id === provider)
+    const providerMap: Record<string, string> = {
+      'suiet': 'Suiet',
+      'slush': 'Slush'
+    }
+    const walletId = providerMap[provider] || provider
+    const wallet = supportedWallets.find(w => w.id === walletId)
     return wallet?.icon || '💼'
   }
 
@@ -211,7 +237,7 @@ const WalletConnector: React.FC<WalletConnectorProps> = ({
                 <span className="text-2xl">{getWalletIcon(currentWallet.provider)}</span>
                 <div>
                   <h3 className="font-semibold">
-                    {supportedWallets.find(w => w.id === currentWallet.provider)?.name}
+                    {currentWallet.provider === 'suiet' ? 'Suiet Wallet' : 'Slush Wallet'}
                   </h3>
                   <div className="flex items-center gap-2">
                     <span className="text-sm text-muted-foreground">

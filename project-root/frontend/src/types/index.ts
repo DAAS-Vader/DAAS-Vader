@@ -3,7 +3,7 @@ export interface WalletInfo {
   connected: boolean
   address: string
   balance: number
-  provider: 'sui' | 'martian' | 'suiet'
+  provider: 'suiet' | 'slush'
   authSignature?: string // For API authentication
 }
 
