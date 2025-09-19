@@ -9,7 +9,14 @@ interface WalletProviderWrapperProps {
 
 export default function WalletProviderWrapper({ children }: WalletProviderWrapperProps) {
   return (
-    <WalletProvider>
+    <WalletProvider
+      autoConnect={false}
+      // Remove storageKey to prevent auto-reconnection from localStorage
+      config={{
+        networks: ['sui:mainnet', 'sui:devnet'],
+        autoDetection: false // Disable auto-detection to prevent unwanted reconnections
+      }}
+    >
       {children}
     </WalletProvider>
   );
