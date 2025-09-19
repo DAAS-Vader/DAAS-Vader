@@ -1,0 +1,74 @@
+name: daas-vader-api
+version: 1.0.0
+
+runtime: nodejs18
+memory: 2GB
+timeout: 600s
+network: devnet
+
+functions:
+  - name: main-api
+    entry: dist/index.js
+    routes:
+      - path: /api/project/upload
+        method: POST
+      - path: /api/project/from-github
+        method: POST
+      - path: /api/project/bundles
+        method: GET
+      - path: /api/project/bundles/:id
+        method: GET
+      - path: /api/project/bundles/:id/tree
+        method: GET
+      - path: /api/project/bundles/:id/files/*
+        method: GET
+      - path: /api/seal/ticket
+        method: POST
+      - path: /api/project/build
+        method: POST
+      - path: /api/docker/build
+        method: POST
+      - path: /api/docker/build/:id
+        method: GET
+      - path: /api/docker/build/:id
+        method: DELETE
+      - path: /api/docker/push
+        method: POST
+      - path: /api/docker/builds
+        method: GET
+      - path: /api/docker/health
+        method: GET
+
+env:
+  NODE_ENV: ${NODE_ENV:-production}
+  PORT: ${PORT:-3001}
+  WALRUS_PUBLISHER: ${WALRUS_PUBLISHER}
+  WALRUS_AGGREGATOR: ${WALRUS_AGGREGATOR}
+  SEAL_URL: ${SEAL_URL}
+  SEAL_SERVICE_TOKEN: ${SEAL_SERVICE_TOKEN}
+  SEAL_TICKET_SECRET: ${SEAL_TICKET_SECRET}
+  DOCKER_BUILD_DIR: ${DOCKER_BUILD_DIR:-/tmp/docker-builds}
+  MAX_CONCURRENT_BUILDS: ${MAX_CONCURRENT_BUILDS:-3}
+  BUILD_TIMEOUT: ${BUILD_TIMEOUT:-600}
+  NAUTILUS_ENDPOINT: ${NAUTILUS_ENDPOINT:-http://localhost:8080}
+  DOCKER_BUILDER_ENDPOINT: ${DOCKER_BUILDER_ENDPOINT:-http://localhost:3001}
+
+build:
+  exclude:
+    - "*.md"
+    - ".env*"
+    - "node_modules"
+    - ".git"
+    - "dist"
+    - "coverage"
+    - "__tests__"
+    - "*.test.*"
+    - "*.spec.*"
+
+deployment:
+  regions:
+    - us-west-2
+  auto_scaling:
+    min_instances: 1
+    max_instances: 10
+    target_cpu: 70
