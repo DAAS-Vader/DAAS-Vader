@@ -1,7 +1,7 @@
 import * as tarStream from 'tar-stream';
 import * as zlib from 'zlib';
-import axios from 'axios';
-import { config } from '../config/index.js';
+import { Readable } from 'stream';
+import { walrusService } from '../services/walrusService.js';
 import { ServiceError } from '../types/index.js';
 
 export class TarExtractor {
@@ -12,20 +12,8 @@ export class TarExtractor {
     try {
       console.log(`📁 Extracting file "${targetFilePath}" from Walrus CID: ${cid}`);
 
-      // Download the tar.gz from Walrus
-      const walrusUrl = `${config.walrus.aggregator}/v1/${cid}`;
-
-      const response = await axios.get(walrusUrl, {
-        responseType: 'stream',
-        timeout: config.limits.requestTimeout
-      });
-
-      if (response.status !== 200) {
-        throw new ServiceError(
-          `Failed to download from Walrus: ${response.statusText}`,
-          response.status
-        );
-      }
+      // Download the tar.gz from Walrus using SDK
+      const bundleData = await walrusService.downloadBundle(cid);
 
       return new Promise((resolve, reject) => {
         const extract = tarStream.extract();
@@ -72,8 +60,12 @@ export class TarExtractor {
           reject(new ServiceError(`Tar extraction failed: ${err.message}`, 500));
         });
 
-        // Pipe: Response Stream -> Gunzip -> Tar Extract
-        response.data.pipe(gunzip).pipe(extract);
+        // Create a readable stream from the buffer and pipe through gunzip to tar extract
+        const readable = new Readable();
+        readable.push(bundleData);
+        readable.push(null); // End the stream
+
+        readable.pipe(gunzip).pipe(extract);
       });
 
     } catch (error) {
@@ -81,13 +73,7 @@ export class TarExtractor {
         throw error;
       }
 
-      if (axios.isAxiosError(error)) {
-        const status = error.response?.status || 502;
-        const message = error.response?.data?.message || error.message;
-        throw new ServiceError(`Walrus download error: ${message}`, status);
-      }
-
-      throw new ServiceError(`File extraction error: ${error.message}`, 500);
+      throw new ServiceError(`File extraction error: ${error instanceof Error ? error.message : 'Unknown error'}`, 500);
     }
   }
 
@@ -98,20 +84,8 @@ export class TarExtractor {
     try {
       console.log(`📋 Listing files from Walrus CID: ${cid}`);
 
-      // Download the tar.gz from Walrus
-      const walrusUrl = `${config.walrus.aggregator}/v1/${cid}`;
-
-      const response = await axios.get(walrusUrl, {
-        responseType: 'stream',
-        timeout: config.limits.requestTimeout
-      });
-
-      if (response.status !== 200) {
-        throw new ServiceError(
-          `Failed to download from Walrus: ${response.statusText}`,
-          response.status
-        );
-      }
+      // Download the tar.gz from Walrus using SDK
+      const bundleData = await walrusService.downloadBundle(cid);
 
       return new Promise((resolve, reject) => {
         const extract = tarStream.extract();
@@ -140,8 +114,12 @@ export class TarExtractor {
           reject(new ServiceError(`Tar listing failed: ${err.message}`, 500));
         });
 
-        // Pipe: Response Stream -> Gunzip -> Tar Extract
-        response.data.pipe(gunzip).pipe(extract);
+        // Create a readable stream from the buffer and pipe through gunzip to tar extract
+        const readable = new Readable();
+        readable.push(bundleData);
+        readable.push(null); // End the stream
+
+        readable.pipe(gunzip).pipe(extract);
       });
 
     } catch (error) {
@@ -149,13 +127,7 @@ export class TarExtractor {
         throw error;
       }
 
-      if (axios.isAxiosError(error)) {
-        const status = error.response?.status || 502;
-        const message = error.response?.data?.message || error.message;
-        throw new ServiceError(`Walrus download error: ${message}`, status);
-      }
-
-      throw new ServiceError(`File listing error: ${error.message}`, 500);
+      throw new ServiceError(`File listing error: ${error instanceof Error ? error.message : 'Unknown error'}`, 500);
     }
   }
 
@@ -171,20 +143,8 @@ export class TarExtractor {
     try {
       console.log(`📊 Getting metadata for "${targetFilePath}" from Walrus CID: ${cid}`);
 
-      // Download the tar.gz from Walrus
-      const walrusUrl = `${config.walrus.aggregator}/v1/${cid}`;
-
-      const response = await axios.get(walrusUrl, {
-        responseType: 'stream',
-        timeout: config.limits.requestTimeout
-      });
-
-      if (response.status !== 200) {
-        throw new ServiceError(
-          `Failed to download from Walrus: ${response.statusText}`,
-          response.status
-        );
-      }
+      // Download the tar.gz from Walrus using SDK
+      const bundleData = await walrusService.downloadBundle(cid);
 
       return new Promise((resolve, reject) => {
         const extract = tarStream.extract();
@@ -200,7 +160,7 @@ export class TarExtractor {
             resolve({
               name: header.name,
               size: header.size || 0,
-              type: header.type,
+              type: header.type as string,
               mode: header.mode || 0
             });
 
@@ -222,8 +182,12 @@ export class TarExtractor {
           reject(new ServiceError(`Tar metadata extraction failed: ${err.message}`, 500));
         });
 
-        // Pipe: Response Stream -> Gunzip -> Tar Extract
-        response.data.pipe(gunzip).pipe(extract);
+        // Create a readable stream from the buffer and pipe through gunzip to tar extract
+        const readable = new Readable();
+        readable.push(bundleData);
+        readable.push(null); // End the stream
+
+        readable.pipe(gunzip).pipe(extract);
       });
 
     } catch (error) {
@@ -231,13 +195,7 @@ export class TarExtractor {
         throw error;
       }
 
-      if (axios.isAxiosError(error)) {
-        const status = error.response?.status || 502;
-        const message = error.response?.data?.message || error.message;
-        throw new ServiceError(`Walrus download error: ${message}`, status);
-      }
-
-      throw new ServiceError(`Metadata extraction error: ${error.message}`, 500);
+      throw new ServiceError(`Metadata extraction error: ${error instanceof Error ? error.message : 'Unknown error'}`, 500);
     }
   }
 }

@@ -4,8 +4,9 @@ import { config } from '../config/index.js';
 import { AuthenticatedRequest, UploadResponse, GitHubUploadRequest, ValidationError } from '../types/index.js';
 import { FileProcessor } from '../utils/fileProcessor.js';
 import { SealService } from '../services/sealService.js';
-import { WalrusService } from '../services/walrusService.js';
+import { walrusService } from '../services/walrusService.js';
 import { GitHubService } from '../services/githubService.js';
+import { NautilusService } from '../services/nautilusService.js';
 
 const router = Router();
 
@@ -24,8 +25,9 @@ const upload = multer({
  */
 router.post('/upload', upload.any(), async (req: Request, res: Response) => {
   try {
-    // const authReq = req as AuthenticatedRequest; // 해커톤용으로 제거
+    const authReq = req as unknown as AuthenticatedRequest;
     const files = req.files as Express.Multer.File[];
+    const { userKeypairSeed } = req.body; // 사용자 키페어 시드 (선택사항)
     
     if (!files || files.length === 0) {
       throw new ValidationError('No files provided');
@@ -79,14 +81,23 @@ router.post('/upload', upload.any(), async (req: Request, res: Response) => {
 
     // 서비스 초기화
     const sealService = new SealService();
-    const walrusService = new WalrusService();
+    // Use Walrus SDK service
 
     // Upload code bundle to Walrus
     const codeBundle = await fileProcessor.createTarBundle(codeFiles);
-    const walrusResponse = await walrusService.uploadCodeBundle(codeBundle);
+    
+    // Upload options for SDK mode (always provide metadata)
+    const uploadOptions = {
+      fileName: `project_${Date.now()}.tar`,
+      mimeType: 'application/tar',
+      epochs: 5,
+      userKeypairSeed, // 사용자의 니모닉 (선택사항)
+    };
 
-    // TODO: zkLogin 인증 구현 후 실제 지갑 주소 사용
-    const walletAddress = '0x742d35Cc6634C0532925a3b8D2Aa2e5a'; // 해커톤용 임시 지갑 주소
+    const walrusResponse = await walrusService.uploadCodeBundle(codeBundle, uploadOptions);
+
+    // 인증된 사용자의 지갑 주소 사용
+    const walletAddress = authReq.walletAddress;
 
     // Upload secrets to Seal (if any)
     let sealResponse = null;
@@ -136,7 +147,7 @@ router.post('/upload', upload.any(), async (req: Request, res: Response) => {
  */
 router.post('/from-github', async (req: Request, res: Response) => {
   try {
-    // const authReq = req as AuthenticatedRequest; // 해커톤용으로 제거
+    const authReq = req as unknown as AuthenticatedRequest;
     const { repo, ref = 'main', installation_id, ignorePatterns = [] }: GitHubUploadRequest = req.body;
     
     if (!repo) {
@@ -171,7 +182,7 @@ router.post('/from-github', async (req: Request, res: Response) => {
     // 서비스 초기화
     const fileProcessor = new FileProcessor();
     const sealService = new SealService();
-    const walrusService = new WalrusService();
+    // Use Walrus SDK service
 
     // Generate file tree metadata
     const allFiles = new Map([...secretFiles, ...codeFiles]);
@@ -181,7 +192,15 @@ router.post('/from-github', async (req: Request, res: Response) => {
     
     // Upload code bundle to Walrus
     const codeBundle = await fileProcessor.createTarBundle(codeFiles);
-    const walrusResponse = await walrusService.uploadCodeBundle(codeBundle);
+
+    // Upload options for SDK mode (always provide metadata)
+    const uploadOptions = {
+      fileName: `github_project_${Date.now()}.tar`,
+      mimeType: 'application/tar',
+      epochs: 5,
+    };
+
+    const walrusResponse = await walrusService.uploadCodeBundle(codeBundle, uploadOptions);
     
     // Upload secrets to Seal (if any)
     let sealResponse = null;
@@ -190,8 +209,8 @@ router.post('/from-github', async (req: Request, res: Response) => {
       sealResponse = await sealService.encryptAndUpload(secretBundle);
     }
     
-    // TODO: zkLogin 인증 구현 후 실제 지갑 주소 사용
-    const walletAddress = '0x742d35Cc6634C0532925a3b8D2Aa2e5a'; // 해커톤용 임시 지갑 주소
+    // 인증된 사용자의 지갑 주소 사용
+    const walletAddress = authReq.walletAddress;
 
     console.log('✅ GitHub project uploaded to Walrus:', walrusResponse.cid);
     
@@ -229,19 +248,8 @@ router.post('/from-github', async (req: Request, res: Response) => {
 });
 
 /**
- * GET /project/bundles
- * Database 없이는 작동하지 않으므로 비활성화
- */
-router.get('/bundles', async (_req: Request, res: Response) => {
-  res.status(503).json({
-    error: 'Service unavailable',
-    message: 'Bundle listing is not available without database'
-  });
-});
-
-/**
  * POST /project/build
- * Walrus에서 코드를 다운로드하고 OCI 이미지로 빌드
+ * Nautilus 보안 엔클레이브를 통한 컨테이너 빌드
  */
 router.post('/build', async (req: Request, res: Response) => {
   try {
@@ -254,27 +262,119 @@ router.post('/build', async (req: Request, res: Response) => {
       });
     }
 
-    console.log(`Build request for bundleId: ${bundleId} from wallet: ${walletAddress}`);
+    console.log('🔨 보안 빌드 시작:', { bundleId, wallet: walletAddress.substring(0, 10) + '...' });
 
-    // DB 없이 bundleId를 직접 Walrus blob ID로 처리
-    console.log(`DB unavailable, treating bundleId as Walrus blob ID: ${bundleId}`);
+    // 서비스 초기화
+    // Use Walrus SDK service for consistency
+    const nautilusService = new NautilusService();
 
-    console.log(`Downloading source from Walrus: ${bundleId}`);
-    console.log(`Starting build for bundle: ${bundleId}`);
+    // 1. Nautilus 기능 확인 (환경 변수로 비활성화 가능)
+    const isNautilusEnabled = process.env.ENABLE_NAUTILUS === 'true';
+    let isNautilusAvailable = false;
 
-    // 간단한 성공 응답 반환 (실제 빌드 로직은 별도 구현 필요)
-    res.status(200).json({
-      success: true,
-      message: 'Build process started',
-      bundleId,
-      walletAddress
-    });
+    if (isNautilusEnabled) {
+      isNautilusAvailable = await nautilusService.healthCheck();
+      if (!isNautilusAvailable) {
+        console.warn('⚠️ Nautilus 서버를 사용할 수 없습니다. Docker Builder Service로 폴백합니다.');
+      }
+    } else {
+      console.info('ℹ️ Nautilus 기능이 비활성화되어 있습니다. Docker Builder Service를 사용합니다.');
+    }
+
+    if (!isNautilusAvailable) {
+      // Check if Docker Builder Service is available as fallback
+      const dockerBuilderAvailable = await nautilusService.checkDockerBuilderHealth();
+      if (!dockerBuilderAvailable) {
+        return res.status(503).json({
+          error: 'Service Unavailable',
+          message: isNautilusEnabled
+            ? 'Nautilus 보안 빌드 서버와 Docker Builder Service 모두 사용할 수 없습니다.'
+            : 'Docker Builder Service를 사용할 수 없습니다. (Nautilus는 비활성화됨)'
+        });
+      }
+    }
+
+    // 2. Walrus에서 코드 번들 다운로드
+    let codeBundle: Buffer;
+    try {
+      codeBundle = await walrusService.downloadBundle(bundleId);
+      console.log('✅ Walrus에서 코드 번들 다운로드 완료:', codeBundle.length, 'bytes');
+    } catch (error) {
+      console.error('❌ Walrus 다운로드 실패:', error);
+      return res.status(404).json({
+        error: 'Bundle Not Found',
+        message: '지정된 bundleId의 코드를 찾을 수 없습니다.'
+      });
+    }
+
+    // 3. 보안 빌드 실행 (Nautilus 또는 Docker Builder Service)
+    try {
+      let buildResult;
+      let buildLogs: string[] = [];
+      let buildMethod = 'unknown';
+
+      if (isNautilusAvailable) {
+        // Nautilus 보안 빌드 사용
+        buildMethod = 'nautilus';
+        buildResult = await nautilusService.secureBuild(bundleId, walletAddress);
+        buildLogs = await nautilusService.getBuildLogs(buildResult.buildHash);
+      } else {
+        // Docker Builder Service 폴백 사용
+        buildMethod = 'docker-builder';
+        const buildId = await nautilusService.buildWithDockerService(bundleId, walletAddress, {
+          platform: 'linux/amd64',
+          labels: {
+            'daas.wallet': walletAddress,
+            'daas.fallback': 'true',
+            'daas.reason': 'nautilus-unavailable'
+          }
+        });
+
+        // Docker 빌드 상태 확인
+        const buildStatus = await nautilusService.getDockerBuildStatus(buildId);
+        buildResult = {
+          imageUrl: `docker-builder://${buildId}`,
+          buildHash: buildId,
+          attestation: 'docker-builder-fallback' // Docker Builder에는 Nautilus 스타일 증명 없음
+        };
+        buildLogs = buildStatus?.logs || [];
+      }
+
+      console.log(`✅ ${buildMethod} 빌드 완료:`, {
+        imageUrl: buildResult.imageUrl,
+        buildHash: buildResult.buildHash.substring(0, 16) + '...',
+        method: buildMethod
+      });
+
+      return res.status(200).json({
+        success: true,
+        imageUrl: buildResult.imageUrl,
+        buildHash: buildResult.buildHash,
+        attestation: buildResult.attestation,
+        logs: buildLogs,
+        walletAddress,
+        timestamp: Date.now(),
+        buildMethod,
+        message: buildMethod === 'nautilus'
+          ? 'Nautilus 보안 엔클레이브에서 빌드가 완료되었습니다.'
+          : 'Docker Builder Service를 통한 빌드가 완료되었습니다. (Nautilus 대신 사용)'
+      });
+
+    } catch (error) {
+      console.error('❌ Nautilus 빌드 실패:', error);
+      return res.status(500).json({
+        error: 'Build Failed',
+        message: error instanceof Error ? error.message : 'Nautilus 보안 빌드 중 오류가 발생했습니다.',
+        bundleId,
+        walletAddress
+      });
+    }
 
   } catch (error) {
-    console.error('Build error:', error);
-    res.status(500).json({
-      error: 'Build Failed',
-      message: 'Failed to start build process'
+    console.error('❌ 빌드 프로세스 오류:', error);
+    return res.status(500).json({
+      error: 'Internal Server Error',
+      message: '빌드 요청 처리 중 예상치 못한 오류가 발생했습니다.'
     });
   }
 });

@@ -27,8 +27,9 @@ export class SealService {
         contentType: 'application/gzip'
       });
       
-      // Set Walrus as the target storage
-      formData.append('target', `walrus://${config.walrus.publisher.replace('https://', '')}`);
+      // Set Walrus as the target storage (Seal needs publisher URL for encrypted storage)
+      const walrusPublisher = process.env.WALRUS_PUBLISHER || 'publisher.walrus-testnet.walrus.space';
+      formData.append('target', `walrus://${walrusPublisher}`);
       
       const response: AxiosResponse = await axios.post(
         `${this.baseURL}/v1/encrypt-and-upload`,
