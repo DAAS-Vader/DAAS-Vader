@@ -4,7 +4,6 @@ import jwt from 'jsonwebtoken';
 import { config } from '../config/index.js';
 import { SealEncryptResponse, TicketResponse, ServiceError } from '../types/index.js';
 import { v4 as uuidv4 } from 'uuid';
-import { pool } from '../db/connection.js';
 
 export class SealService {
   private baseURL: string;
@@ -28,8 +27,9 @@ export class SealService {
         contentType: 'application/gzip'
       });
       
-      // Set Walrus as the target storage
-      formData.append('target', `walrus://${config.walrus.publisher.replace('https://', '')}`);
+      // Set Walrus as the target storage (Seal needs publisher URL for encrypted storage)
+      const walrusPublisher = process.env.WALRUS_PUBLISHER || 'publisher.walrus-testnet.walrus.space';
+      formData.append('target', `walrus://${walrusPublisher}`);
       
       const response: AxiosResponse = await axios.post(
         `${this.baseURL}/v1/encrypt-and-upload`,
@@ -106,11 +106,8 @@ export class SealService {
         algorithm: 'HS256'
       });
 
-      // Store JTI in database for single-use validation
-      await pool.query(
-        'INSERT INTO seal_ticket_jti (jti, issued_at, expires_at) VALUES ($1, $2, $3)',
-        [jti, new Date(), new Date(exp * 1000)]
-      );
+      // TODO: Store JTI for single-use validation (DB disabled for hackathon)
+      console.log('⚠️ JTI storage disabled - ticket can be reused');
 
       return {
         ticket,
@@ -136,21 +133,13 @@ export class SealService {
         algorithms: ['HS256']
       }) as any;
       
-      // Check if ticket exists and is not expired
-      const result = await pool.query(
-        'SELECT jti FROM seal_ticket_jti WHERE jti = $1 AND expires_at > NOW()',
-        [payload.jti]
-      );
+      // TODO: Check if ticket exists and is not expired (DB disabled for hackathon)
+      console.log('⚠️ Ticket validation disabled - accepting all valid signatures');
 
-      if (result.rows.length === 0) {
-        throw new ServiceError('Ticket has already been used or expired', 401);
+      // Check expiration time from JWT payload
+      if (payload.exp < Math.floor(Date.now() / 1000)) {
+        throw new ServiceError('Ticket has expired', 401);
       }
-
-      // Mark ticket as used by deleting the JTI
-      await pool.query(
-        'DELETE FROM seal_ticket_jti WHERE jti = $1',
-        [payload.jti]
-      );
       
       return payload;
       

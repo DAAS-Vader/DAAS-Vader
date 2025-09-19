@@ -9,6 +9,7 @@ import { Card } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Progress } from '@/components/ui/progress'
+import { WalletInfo } from '@/types'
 
 interface FileUpload {
   id: string
@@ -42,6 +43,7 @@ interface ProjectUploadProps {
   maxFileSize?: number
   acceptedFileTypes?: string[]
   backendUrl?: string
+  walletInfo?: WalletInfo | null
 }
 
 const ProjectUpload: React.FC<ProjectUploadProps> = ({
@@ -49,7 +51,8 @@ const ProjectUpload: React.FC<ProjectUploadProps> = ({
   onGitHubConnect,
   maxFileSize = 10 * 1024 * 1024, // 10MB
   acceptedFileTypes = ['.js', '.ts', '.jsx', '.tsx', '.py', '.java', '.cpp', '.c', '.go', '.rs', '.json', '.md', '.txt'],
-  backendUrl = 'http://localhost:3001'
+  backendUrl = 'http://localhost:3001',
+  walletInfo
 }) => {
   const [activeTab, setActiveTab] = useState<'upload' | 'github'>('upload')
   const [isDragOver, setIsDragOver] = useState(false)
@@ -60,7 +63,6 @@ const ProjectUpload: React.FC<ProjectUploadProps> = ({
   const [isConnecting, setIsConnecting] = useState(false)
   const [connectionStatus, setConnectionStatus] = useState<'idle' | 'connected' | 'error'>('idle')
   const [uploadResponse, setUploadResponse] = useState<any>(null)
-  const [walletAddress] = useState('0x742d35Cc6634C0532925a3b8D2Aa2e5a') // 임시 지갑 주소
   const [isDirectoryMode, setIsDirectoryMode] = useState(false)
   const [expandedFolders, setExpandedFolders] = useState<Set<string>>(new Set())
   const fileInputRef = useRef<HTMLInputElement>(null)
@@ -363,10 +365,14 @@ const ProjectUpload: React.FC<ProjectUploadProps> = ({
 
       let response: Response
       try {
+        if (!walletInfo?.authSignature) {
+          throw new Error('지갑 인증이 필요합니다.')
+        }
+
         response = await fetch(`${backendUrl}/api/project/upload`, {
           method: 'POST',
           headers: {
-            'Authorization': `Bearer ${walletAddress}`,
+            'Authorization': `Bearer ${walletInfo.authSignature}`,
           },
           body: formData,
         })
@@ -433,7 +439,7 @@ const ProjectUpload: React.FC<ProjectUploadProps> = ({
         return u
       }))
     }
-  }, [acceptedFileTypes, maxFileSize, onFileUpload, backendUrl, walletAddress])
+  }, [acceptedFileTypes, maxFileSize, onFileUpload, backendUrl, walletInfo])
 
   const removeUpload = useCallback((id: string) => {
     setUploads(prev => prev.filter(u => u.id !== id))
@@ -471,11 +477,15 @@ const ProjectUpload: React.FC<ProjectUploadProps> = ({
     setSelectedRepo(repo)
 
     try {
+      if (!walletInfo?.authSignature) {
+        throw new Error('지갑 인증이 필요합니다.')
+      }
+
       const response = await fetch(`${backendUrl}/api/project/from-github`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${walletAddress}`,
+          'Authorization': `Bearer ${walletInfo.authSignature}`,
         },
         body: JSON.stringify({
           repo: repo.full_name,
@@ -495,7 +505,7 @@ const ProjectUpload: React.FC<ProjectUploadProps> = ({
     } catch (error) {
       console.error('GitHub repo selection error:', error)
     }
-  }, [onGitHubConnect, backendUrl, walletAddress])
+  }, [onGitHubConnect, backendUrl, walletInfo])
 
   const formatFileSize = (bytes: number) => {
     if (bytes === 0) return '0 Bytes'
@@ -522,7 +532,10 @@ const ProjectUpload: React.FC<ProjectUploadProps> = ({
           </p>
           <div className="mt-4 flex items-center justify-center gap-2">
             <Badge variant="secondary" className="bg-primary/10 text-primary border-primary/20">
-              지갑 주소: {walletAddress}
+              지갑 주소: {walletInfo?.address ?
+                `${walletInfo.address.slice(0, 6)}...${walletInfo.address.slice(-4)}` :
+                '연결되지 않음'
+              }
             </Badge>
           </div>
         </motion.div>
