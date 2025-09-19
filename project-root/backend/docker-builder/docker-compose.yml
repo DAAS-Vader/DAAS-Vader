@@ -1,0 +1,89 @@
+version: '3.8'
+
+services:
+  docker-builder:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: daas-docker-builder
+    restart: unless-stopped
+    privileged: true  # Required for Docker-in-Docker
+    environment:
+      - NODE_ENV=${NODE_ENV:-development}
+      - PORT=3001
+      - DOCKER_BUILD_DIR=/tmp/docker-builds
+      - MAX_CONCURRENT_BUILDS=3
+      - BUILD_TIMEOUT=600
+      # Walrus configuration
+      - WALRUS_PUBLISHER=${WALRUS_PUBLISHER}
+      - WALRUS_AGGREGATOR=${WALRUS_AGGREGATOR}
+      # Optional registry credentials for testing
+      - REGISTRY_URL=${REGISTRY_URL}
+      - REGISTRY_USERNAME=${REGISTRY_USERNAME}
+      - REGISTRY_PASSWORD=${REGISTRY_PASSWORD}
+    ports:
+      - "3001:3001"
+    volumes:
+      # Docker socket for Docker-in-Docker
+      - /var/run/docker.sock:/var/run/docker.sock
+      # Persistent storage for builds (optional)
+      - docker-builder-builds:/tmp/docker-builds
+      # Logs
+      - docker-builder-logs:/var/log/docker-builder
+      # Development volume mount (comment out for production)
+      - .:/app:ro
+    networks:
+      - daas-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3001/api/docker/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    security_opt:
+      - no-new-privileges:true
+    # Resource limits for security
+    mem_limit: 2g
+    memswap_limit: 2g
+    cpus: '2.0'
+    ulimits:
+      nofile:
+        soft: 65536
+        hard: 65536
+    # Logging configuration
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  # Optional: Registry service for local testing
+  registry:
+    image: registry:2
+    container_name: daas-local-registry
+    restart: unless-stopped
+    environment:
+      - REGISTRY_STORAGE_DELETE_ENABLED=true
+    ports:
+      - "5000:5000"
+    volumes:
+      - registry-data:/var/lib/registry
+    networks:
+      - daas-network
+    profiles:
+      - testing  # Only start when using 'testing' profile
+
+volumes:
+  docker-builder-builds:
+    driver: local
+  docker-builder-logs:
+    driver: local
+  registry-data:
+    driver: local
+
+networks:
+  daas-network:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.20.0.0/16
