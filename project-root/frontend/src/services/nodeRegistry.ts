@@ -171,10 +171,15 @@ export class NodeRegistryService {
    * 특정 주소의 노드 존재 여부 확인
    */
   async nodeExists(providerAddress: string): Promise<boolean> {
+    // 컨트랙트가 배포되지 않은 경우 false 반환
+    if (this.packageId === '0x0' || this.registryObjectId === '0x0') {
+      return false
+    }
+
     try {
       const txb = new TransactionBlock()
 
-      const result = txb.moveCall({
+      txb.moveCall({
         target: `${this.packageId}::${CONTRACT_CONFIG.MODULE_NAME}::${MOVE_FUNCTIONS.NODE_EXISTS}`,
         arguments: [
           txb.object(this.registryObjectId),
@@ -187,7 +192,6 @@ export class NodeRegistryService {
         sender: providerAddress,
       })
 
-      // TODO: 응답 파싱 로직 구현
       return response.results?.[0]?.returnValues?.[0]?.[0] === 1
     } catch (error) {
       console.error('노드 존재 여부 확인 실패:', error)
@@ -199,6 +203,11 @@ export class NodeRegistryService {
    * 특정 주소의 노드 메타데이터 조회
    */
   async getNodeMetadata(providerAddress: string): Promise<NodeMetadata | null> {
+    // 컨트랙트가 배포되지 않은 경우 null 반환
+    if (this.packageId === '0x0' || this.registryObjectId === '0x0') {
+      return null
+    }
+
     try {
       const txb = new TransactionBlock()
 
@@ -216,7 +225,6 @@ export class NodeRegistryService {
       })
 
       // TODO: 응답 파싱하여 NodeMetadata 객체로 변환
-      // 현재는 더미 데이터 반환
       if (response.results?.[0]?.returnValues) {
         return {
           cpu_cores: 8,
@@ -296,6 +304,11 @@ export class NodeRegistryService {
    * 모든 노드 리스트 조회 (사용자 페이지용)
    */
   async getAllNodes(): Promise<NodeMetadata[]> {
+    // 컨트랙트가 배포되지 않은 경우 빈 배열 반환
+    if (this.packageId === '0x0' || this.registryObjectId === '0x0') {
+      return []
+    }
+
     try {
       // TODO: 실제 컨트랙트에서 노드 리스트 조회
       // 현재는 빈 배열 반환 (컨트랙트 배포 후 구현)
