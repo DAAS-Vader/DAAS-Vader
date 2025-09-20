@@ -98,6 +98,44 @@ const NodeOperationDashboard: React.FC<NodeOperationDashboardProps> = ({
     loadNodeInfo()
   }, [walletInfo?.address])
 
+  // 실시간 작업 요청 이벤트 구독
+  useEffect(() => {
+    if (!walletInfo?.address || !nodeMetadata) {
+      return
+    }
+
+    console.log(`📡 제공자 ${walletInfo.address}의 작업 요청 이벤트 구독 시작`)
+
+    // 브라우저 알림 권한 요청
+    if (Notification.permission === 'default') {
+      Notification.requestPermission().then(permission => {
+        console.log(`🔔 알림 권한: ${permission}`)
+      })
+    }
+
+    const unsubscribe = jobRequestService.subscribeToJobEvents(
+      walletInfo.address,
+      (eventData) => {
+        console.log('🔔 새로운 작업 요청 수신:', eventData)
+
+        // 브라우저 알림 표시
+        if (Notification.permission === 'granted') {
+          new Notification('새로운 작업 요청', {
+            body: `프로젝트: ${eventData.projectName}\n예상 수익: ${eventData.offeredPrice} SUI`,
+            icon: '/favicon.ico'
+          })
+        }
+
+        // 화면에 토스트 메시지 표시 (실제 구현에서는 toast 라이브러리 사용)
+        alert(`🔔 새로운 작업 요청!\n프로젝트: ${eventData.projectName}\n예상 수익: ${eventData.offeredPrice} SUI`)
+      }
+    )
+
+    return () => {
+      unsubscribe()
+    }
+  }, [walletInfo?.address, nodeMetadata])
+
   // 로딩 중일 때
   if (isLoading) {
     return (

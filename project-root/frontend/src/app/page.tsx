@@ -20,7 +20,9 @@ import NodeSelector from '@/components/nodes/NodeSelector'
 import ProjectUpload from '@/components/ProjectUpload'
 import MonitoringDashboard from '@/components/monitoring/MonitoringDashboard'
 import ProviderDashboard from '@/components/provider/ProviderDashboard'
-import { WorkerNode, ProjectUploadData, Deployment } from '@/types'
+import { WalletInfo, WorkerNode, ProjectUploadData, Deployment } from '@/types'
+import { jobRequestService } from '@/services/jobRequestService'
+import { JobRequest } from '@/contracts/types'
 
 type UserRole = 'user' | 'provider' | null
 type Step = 'wallet' | 'nodes' | 'upload' | 'deploy' | 'monitor'
@@ -31,6 +33,8 @@ export default function Home() {
   const [selectedNodes, setSelectedNodes] = useState<WorkerNode[]>([])
   const [projectData, setProjectData] = useState<ProjectUploadData | null>(null)
   const [deployment, setDeployment] = useState<Deployment | null>(null)
+  const [isCheckingJobs, setIsCheckingJobs] = useState(false)
+  const [walletInfo, setWalletInfo] = useState<WalletInfo | null>(null)
 
   // Get current wallet account from dapp-kit
   const currentAccount = useCurrentAccount()
@@ -45,7 +49,7 @@ export default function Home() {
 
   const isStepCompleted = (stepId: string) => {
     switch (stepId) {
-      case 'wallet': return currentAccount !== null
+      case 'wallet': return walletInfo !== null
       case 'nodes': return selectedNodes.length > 0
       case 'upload': return projectData !== null
       case 'deploy': return deployment !== null
@@ -64,16 +68,53 @@ export default function Home() {
 
   // Auto-advance when wallet is connected
   useEffect(() => {
-    if (currentAccount && currentStep === 'wallet') {
-      setCurrentStep('nodes')
+    if (currentAccount && currentStep === 'wallet' && !walletInfo) {
+      const wallet: WalletInfo = {
+        connected: true,
+        address: currentAccount.address,
+        balance: 0,
+        provider: 'suiet'
+      }
+      handleWalletConnect(wallet)
     } else if (!currentAccount && currentStep !== 'wallet') {
       // Reset if wallet disconnected
-      setCurrentStep('wallet')
-      setSelectedNodes([])
-      setProjectData(null)
-      setDeployment(null)
+      handleWalletDisconnect()
     }
-  }, [currentAccount, currentStep])
+  }, [currentAccount, currentStep, walletInfo])
+
+  const handleWalletConnect = async (wallet: WalletInfo) => {
+    setWalletInfo(wallet)
+    setIsCheckingJobs(true)
+
+    try {
+      // 사용자의 활성 작업 확인
+      console.log(`🔍 사용자 ${wallet.address}의 활성 작업 확인 중...`)
+      const userActiveJobs = await jobRequestService.getUserActiveJobs(wallet.address)
+
+      if (userActiveJobs.length > 0) {
+        console.log(`✅ ${userActiveJobs.length}개의 활성 작업 발견`)
+        // 활성 작업이 있는 경우 모니터링 단계로 이동
+        setCurrentStep('monitor')
+      } else {
+        console.log(`📝 활성 작업 없음, 노드 선택 단계로 이동`)
+        setCurrentStep('nodes')
+      }
+    } catch (error) {
+      console.error('활성 작업 확인 실패:', error)
+      // 오류 발생 시 기본적으로 노드 선택 단계로 이동
+      setCurrentStep('nodes')
+    } finally {
+      setIsCheckingJobs(false)
+    }
+  }
+
+  const handleWalletDisconnect = () => {
+    setWalletInfo(null)
+    setCurrentStep('wallet')
+    setSelectedNodes([])
+    setProjectData(null)
+    setDeployment(null)
+  }
 
   const handleNodesSelect = (nodes: WorkerNode[]) => {
     setSelectedNodes(nodes)
@@ -164,6 +205,12 @@ export default function Home() {
                 </div>
               )}
             </Card>
+            {isCheckingJobs && (
+              <div className="text-center p-4">
+                <div className="w-6 h-6 border-2 border-primary border-t-transparent rounded-full animate-spin mx-auto mb-2" />
+                <p className="text-muted-foreground text-sm">활성 작업 확인 중...</p>
+              </div>
+            )}
           </div>
         )
 

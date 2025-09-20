@@ -2,21 +2,16 @@
 
 import React, { useState, useEffect } from 'react'
 import { motion } from 'framer-motion'
-import { Wallet, ArrowRight } from 'lucide-react'
+import { Wallet } from 'lucide-react'
 import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { ConnectButton, useCurrentAccount } from '@mysten/dapp-kit'
 import NodeSetup from './NodeSetup'
 import NodeOperationDashboard from './NodeOperationDashboard'
+import { WalletInfo } from '@/types'
+import { nodeRegistryService } from '@/services/nodeRegistry'
 
-interface ResourceConfig {
-  cpu: number
-  memory: number
-  storage: number
-  bandwidth: number
-  pricePerHour: number
-}
 
 type ViewState = 'wallet' | 'dashboard' | 'node-setup'
 
@@ -27,15 +22,52 @@ interface ProviderDashboardProps {
 const ProviderDashboard: React.FC<ProviderDashboardProps> = ({ onRoleChange }) => {
   const [currentView, setCurrentView] = useState<ViewState>('wallet')
   const currentAccount = useCurrentAccount()
+  const [walletInfo, setWalletInfo] = useState<WalletInfo | null>(null)
+  const [isCheckingNode, setIsCheckingNode] = useState(false)
 
   // Auto-advance when wallet is connected
   useEffect(() => {
-    if (currentAccount && currentView === 'wallet') {
-      setCurrentView('dashboard')
+    if (currentAccount && currentView === 'wallet' && !walletInfo) {
+      const wallet: WalletInfo = {
+        connected: true,
+        address: currentAccount.address,
+        balance: 0,
+        provider: 'suiet'
+      }
+      handleWalletConnect(wallet)
     } else if (!currentAccount && currentView !== 'wallet') {
-      setCurrentView('wallet')
+      handleWalletDisconnect()
     }
-  }, [currentAccount, currentView])
+  }, [currentAccount, currentView, walletInfo])
+
+  const handleWalletConnect = async (wallet: WalletInfo) => {
+    setWalletInfo(wallet)
+    setIsCheckingNode(true)
+
+    try {
+      // 제공자의 노드 등록 상태 확인
+      console.log(`🔍 제공자 ${wallet.address}의 노드 등록 상태 확인 중...`)
+      const nodeExists = await nodeRegistryService.nodeExists(wallet.address)
+
+      if (nodeExists) {
+        console.log(`✅ 등록된 노드 발견, 운영 대시보드로 이동`)
+        setCurrentView('dashboard')
+      } else {
+        console.log(`📝 등록된 노드 없음, 노드 생성 안내`)
+        setCurrentView('dashboard') // NodeOperationDashboard에서 노드 없음 처리
+      }
+    } catch (error) {
+      console.error('노드 상태 확인 실패:', error)
+      setCurrentView('dashboard')
+    } finally {
+      setIsCheckingNode(false)
+    }
+  }
+
+  const handleWalletDisconnect = () => {
+    setWalletInfo(null)
+    setCurrentView('wallet')
+  }
 
   const handleNodeCreate = () => {
     setCurrentView('node-setup')
@@ -110,6 +142,12 @@ const ProviderDashboard: React.FC<ProviderDashboardProps> = ({ onRoleChange }) =
               <div className="mt-4 p-4 bg-muted rounded-lg">
                 <p className="text-sm text-muted-foreground">연결된 주소:</p>
                 <p className="text-xs font-mono mt-1">{currentAccount.address}</p>
+              </div>
+            )}
+            {isCheckingNode && (
+              <div className="text-center p-4">
+                <div className="w-6 h-6 border-2 border-primary border-t-transparent rounded-full animate-spin mx-auto mb-2" />
+                <p className="text-muted-foreground text-sm">노드 등록 상태 확인 중...</p>
               </div>
             )}
           </Card>
