@@ -77,13 +77,21 @@ export default function Home() {
   }
 
   const handleProjectUpload = async (files: File[]) => {
-    // Mock project data
+    // Project upload completed - data will be set when upload is fully done
     const mockProjectData: ProjectUploadData = {
       files,
       name: 'my-project',
       description: 'My awesome project'
     }
     setProjectData(mockProjectData)
+    // Don't automatically move to next step - let user see upload progress
+    // setCurrentStep('deploy') will be called by ProjectUpload component when ready
+  }
+
+  // New function to handle successful upload completion
+  const handleUploadComplete = (uploadResult: { success: boolean; message: string; cid_code?: string; blobId?: string }) => {
+    console.log('Upload completed with result:', uploadResult)
+    // Only move to deploy step after upload is actually complete
     setCurrentStep('deploy')
   }
 
@@ -142,6 +150,7 @@ export default function Home() {
         return (
           <ProjectUpload
             onFileUpload={handleProjectUpload}
+            onUploadComplete={handleUploadComplete}
             onGitHubConnect={async (repo) => {
               const mockProjectData: ProjectUploadData = {
                 githubRepo: repo.full_name,

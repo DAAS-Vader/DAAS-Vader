@@ -2,7 +2,7 @@
 
 import React, { useState, useCallback, useRef } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { Upload, Github, File, X, Check, AlertCircle, Folder, GitBranch, Star } from 'lucide-react'
+import { Upload, Github, File, X, Check, AlertCircle, Folder, GitBranch, Star, Clock, ExternalLink, CheckCircle2, XCircle, Loader } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Card } from '@/components/ui/card'
@@ -10,6 +10,8 @@ import { Badge } from '@/components/ui/badge'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Progress } from '@/components/ui/progress'
 import { WalletInfo } from '@/types'
+import { useSignAndExecuteTransaction } from '@mysten/dapp-kit'
+import { Transaction } from '@mysten/sui/transactions'
 
 interface FileUpload {
   id: string
@@ -39,6 +41,7 @@ interface GitHubRepo {
 
 interface ProjectUploadProps {
   onFileUpload?: (files: File[]) => Promise<void>
+  onUploadComplete?: (uploadResult: any) => void
   onGitHubConnect?: (repo: GitHubRepo) => Promise<void>
   maxFileSize?: number
   acceptedFileTypes?: string[]
@@ -48,6 +51,7 @@ interface ProjectUploadProps {
 
 const ProjectUpload: React.FC<ProjectUploadProps> = ({
   onFileUpload,
+  onUploadComplete,
   onGitHubConnect,
   maxFileSize = 10 * 1024 * 1024, // 10MB
   acceptedFileTypes = ['.js', '.ts', '.jsx', '.tsx', '.py', '.java', '.cpp', '.c', '.go', '.rs', '.json', '.md', '.txt'],
@@ -65,8 +69,16 @@ const ProjectUpload: React.FC<ProjectUploadProps> = ({
   const [uploadResponse, setUploadResponse] = useState<any>(null)
   const [isDirectoryMode, setIsDirectoryMode] = useState(false)
   const [expandedFolders, setExpandedFolders] = useState<Set<string>>(new Set())
+  const [uploadProgress, setUploadProgress] = useState<{
+    stage: 'idle' | 'preparing' | 'signing' | 'uploading' | 'completed' | 'error'
+    message: string
+    txHash?: string
+    blobId?: string
+  }>({ stage: 'idle', message: '' })
+  const [showUploadDetails, setShowUploadDetails] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const folderInputRef = useRef<HTMLInputElement>(null)
+  const { mutate: signAndExecuteTransaction } = useSignAndExecuteTransaction()
 
   const handleDragOver = useCallback((e: React.DragEvent) => {
     e.preventDefault()
@@ -294,7 +306,16 @@ const ProjectUpload: React.FC<ProjectUploadProps> = ({
     return items
   }, [expandedFolders, setUploads])
 
+  // 새 업로드 시작 시 상태 초기화
+  const resetUploadState = useCallback(() => {
+    setUploadProgress({ stage: 'idle', message: '' })
+    setShowUploadDetails(false)
+    setUploadResponse(null)
+  }, [])
+
   const handleFiles = useCallback(async (files: File[]) => {
+    // 새 업로드 시작 시 이전 상태 초기화
+    resetUploadState()
     const validFiles = files.filter(file => {
       const extension = '.' + file.name.split('.').pop()?.toLowerCase()
       const filePath = (file as any).webkitRelativePath || file.name
@@ -352,6 +373,10 @@ const ProjectUpload: React.FC<ProjectUploadProps> = ({
         formData.append('files', file)
       })
 
+      // 업로드 상세 정보 표시
+      setShowUploadDetails(true)
+      setUploadProgress({ stage: 'preparing', message: '트랜잭션 준비 중...' })
+
       // 업로드 진행률 시뮬레이션
       const progressInterval = setInterval(() => {
         setUploads(prev => prev.map(u => {
@@ -363,74 +388,116 @@ const ProjectUpload: React.FC<ProjectUploadProps> = ({
         }))
       }, 300)
 
-      let response: Response
-      try {
-        if (!walletInfo?.authSignature) {
-          throw new Error('지갑 인증이 필요합니다.')
-        }
+      if (!walletInfo?.connected || !walletInfo?.authSignature || !walletInfo?.address) {
+        throw new Error('먼저 지갑을 연결해주세요.')
+      }
 
-        response = await fetch(`${backendUrl}/api/project/upload`, {
-          method: 'POST',
-          headers: {
-            'Authorization': `Bearer ${walletInfo.authSignature}`,
-          },
-          body: formData,
-        })
-      } catch (fetchError) {
-        clearInterval(progressInterval)
-        console.warn('백엔드 서버에 연결할 수 없습니다. 데모 모드로 진행합니다.')
+      // 1단계: 트랜잭션 준비
+      setUploadProgress({ stage: 'preparing', message: 'Walrus 업로드 트랜잭션 준비 중...' })
 
-        // 데모 모드: 가짜 성공 응답
-        setTimeout(() => {
-          setUploads(prev => prev.map(u => {
-            if (newUploads.find(nu => nu.id === u.id)) {
-              return { ...u, progress: 100, status: 'completed' as const }
-            }
-            return u
-          }))
+      const prepareResponse = await fetch(`${backendUrl}/api/project/prepare-upload`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${walletInfo.authSignature}`,
+          'x-wallet-address': walletInfo.address,
+        },
+        body: formData,
+      })
 
-          setUploadResponse({
-            success: true,
-            message: '데모 모드: 파일이 성공적으로 업로드되었습니다.',
-            files: validFiles.map(f => f.name),
-            size_code: validFiles.reduce((total, f) => total + f.size, 0)
-          })
-        }, 1000)
+      if (!prepareResponse.ok) {
+        const errorText = await prepareResponse.text()
+        throw new Error(`Transaction preparation failed: ${errorText}`)
+      }
 
-        if (onFileUpload) {
-          await onFileUpload(validFiles)
-        }
-        return
+      const { txData, gasObjectId, gasBudget, metadata } = await prepareResponse.json()
+
+      // 2단계: 사용자 지갑으로 트랜잭션 서명 및 실행
+      setUploadProgress({ stage: 'signing', message: '지갑에서 트랜잭션 서명 중... 지갑 팝업을 확인해주세요.' })
+
+      const transaction = Transaction.from(txData)
+
+      // 프로미스를 사용하여 트랜잭션 결과를 기다림
+      const signedTransactionResult = await new Promise<any>((resolve, reject) => {
+        signAndExecuteTransaction(
+          { transaction },
+          {
+            onSuccess: (result) => {
+              console.log('Transaction signed successfully:', result)
+              setUploadProgress({
+                stage: 'uploading',
+                message: 'Walrus에 파일 업로드 중...',
+                txHash: result.digest
+              })
+              resolve(result)
+            },
+            onError: (error) => {
+              console.error('Transaction signing failed:', error)
+              setUploadProgress({
+                stage: 'error',
+                message: `트랜잭션 서명 실패: ${error?.message || error?.toString() || '알 수 없는 오류'}`
+              })
+              reject(error)
+            },
+          }
+        )
+      })
+
+      // 3단계: 서명된 트랜잭션으로 업로드 완료
+      setUploadProgress({
+        stage: 'uploading',
+        message: '업로드 완료 중...',
+        txHash: signedTransactionResult.digest
+      })
+
+      const completeResponse = await fetch(`${backendUrl}/api/project/complete-upload`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${walletInfo.authSignature}`,
+          'x-wallet-address': walletInfo.address,
+        },
+        body: JSON.stringify({
+          signedTransaction: signedTransactionResult.digest,
+          walletAddress: walletInfo.address,
+        }),
+      })
+
+      if (!completeResponse.ok) {
+        const errorText = await completeResponse.text()
+        throw new Error(`Upload completion failed: ${errorText}`)
       }
 
       clearInterval(progressInterval)
 
-      if (response.ok) {
-        const result = await response.json()
-        setUploadResponse(result)
+      const result = await completeResponse.json()
+      setUploadResponse(result)
 
-        // 업로드 완료 상태로 업데이트
-        setUploads(prev => prev.map(u => {
-          if (newUploads.find(nu => nu.id === u.id)) {
-            return { ...u, progress: 100, status: 'completed' as const }
-          }
-          return u
-        }))
-
-        if (onFileUpload) {
-          await onFileUpload(validFiles)
+      // 업로드 완료 상태로 업데이트
+      setUploads(prev => prev.map(u => {
+        if (newUploads.find(nu => nu.id === u.id)) {
+          return { ...u, progress: 100, status: 'completed' as const }
         }
-      } else {
-        // 에러 상태로 업데이트
-        setUploads(prev => prev.map(u => {
-          if (newUploads.find(nu => nu.id === u.id)) {
-            return { ...u, status: 'error' as const }
-          }
-          return u
-        }))
+        return u
+      }))
+
+      setUploadProgress({
+        stage: 'completed',
+        message: '업로드가 성공적으로 완료되었습니다!',
+        txHash: signedTransactionResult.digest,
+        blobId: result.cid_code || result.blobId
+      })
+
+      if (onFileUpload) {
+        await onFileUpload(validFiles)
+      }
+
+      // Call onUploadComplete after everything is done
+      if (onUploadComplete) {
+        onUploadComplete(result)
       }
     } catch (error) {
       console.error('Upload error:', error)
+
       // 에러 상태로 업데이트
       setUploads(prev => prev.map(u => {
         if (newUploads.find(nu => nu.id === u.id)) {
@@ -438,8 +505,13 @@ const ProjectUpload: React.FC<ProjectUploadProps> = ({
         }
         return u
       }))
+
+      setUploadProgress({
+        stage: 'error',
+        message: `업로드 오류: ${error?.message || error?.toString() || '알 수 없는 오류'}`
+      })
     }
-  }, [acceptedFileTypes, maxFileSize, onFileUpload, backendUrl, walletInfo])
+  }, [acceptedFileTypes, maxFileSize, onFileUpload, backendUrl, walletInfo, resetUploadState])
 
   const removeUpload = useCallback((id: string) => {
     setUploads(prev => prev.filter(u => u.id !== id))
@@ -658,7 +730,155 @@ const ProjectUpload: React.FC<ProjectUploadProps> = ({
                   )}
                 </AnimatePresence>
 
-                {uploadResponse && (
+                {/* 업로드 진행 상황 표시 */}
+                <AnimatePresence>
+                  {showUploadDetails && uploadProgress.stage !== 'idle' && (
+                    <motion.div
+                      initial={{ opacity: 0, y: 20 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      exit={{ opacity: 0, y: -20 }}
+                      className={`p-4 rounded-lg border ${
+                        uploadProgress.stage === 'error'
+                          ? 'bg-red-500/10 border-red-500/20'
+                          : uploadProgress.stage === 'completed'
+                          ? 'bg-green-500/10 border-green-500/20'
+                          : 'bg-blue-500/10 border-blue-500/20'
+                      }`}
+                    >
+                      <div className="flex items-center gap-3 mb-3">
+                        {uploadProgress.stage === 'preparing' && (
+                          <Loader className="w-5 h-5 text-blue-500 animate-spin" />
+                        )}
+                        {uploadProgress.stage === 'signing' && (
+                          <Clock className="w-5 h-5 text-blue-500 animate-pulse" />
+                        )}
+                        {uploadProgress.stage === 'uploading' && (
+                          <Loader className="w-5 h-5 text-blue-500 animate-spin" />
+                        )}
+                        {uploadProgress.stage === 'completed' && (
+                          <CheckCircle2 className="w-5 h-5 text-green-500" />
+                        )}
+                        {uploadProgress.stage === 'error' && (
+                          <XCircle className="w-5 h-5 text-red-500" />
+                        )}
+
+                        <div className="flex-1">
+                          <h4 className={`font-medium ${
+                            uploadProgress.stage === 'error'
+                              ? 'text-red-600'
+                              : uploadProgress.stage === 'completed'
+                              ? 'text-green-600'
+                              : 'text-blue-600'
+                          }`}>
+                            {uploadProgress.stage === 'preparing' && '업로드 준비 중'}
+                            {uploadProgress.stage === 'signing' && '트랜잭션 서명 중'}
+                            {uploadProgress.stage === 'uploading' && 'Walrus 업로드 중'}
+                            {uploadProgress.stage === 'completed' && '업로드 완료!'}
+                            {uploadProgress.stage === 'error' && '업로드 실패'}
+                          </h4>
+                          <p className={`text-sm ${
+                            uploadProgress.stage === 'error'
+                              ? 'text-red-600'
+                              : uploadProgress.stage === 'completed'
+                              ? 'text-green-600'
+                              : 'text-blue-600'
+                          }`}>
+                            {uploadProgress.message}
+                          </p>
+                        </div>
+                      </div>
+
+                      {/* 트랜잭션 해시 표시 */}
+                      {uploadProgress.txHash && (
+                        <div className="text-sm space-y-2">
+                          <div className="flex items-center gap-2">
+                            <span className="text-muted-foreground">트랜잭션 해시:</span>
+                            <code className="bg-black/10 px-2 py-1 rounded text-xs">
+                              {uploadProgress.txHash.slice(0, 8)}...{uploadProgress.txHash.slice(-8)}
+                            </code>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="w-4 h-4 p-0"
+                              onClick={() => {
+                                const explorerUrl = `https://explorer.sui.io/txblock/${uploadProgress.txHash}?network=devnet`
+                                window.open(explorerUrl, '_blank')
+                              }}
+                            >
+                              <ExternalLink className="w-3 h-3" />
+                            </Button>
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Blob ID 표시 */}
+                      {uploadProgress.blobId && (
+                        <div className="text-sm space-y-2 mt-2">
+                          <div className="flex items-center gap-2">
+                            <span className="text-muted-foreground">Walrus Blob ID:</span>
+                            <code className="bg-black/10 px-2 py-1 rounded text-xs">
+                              {uploadProgress.blobId.slice(0, 12)}...{uploadProgress.blobId.slice(-12)}
+                            </code>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="w-4 h-4 p-0"
+                              onClick={() => {
+                                navigator.clipboard.writeText(uploadProgress.blobId!)
+                              }}
+                            >
+                              <File className="w-3 h-3" />
+                            </Button>
+                          </div>
+                        </div>
+                      )}
+
+                      {/* 진행 바 */}
+                      {(uploadProgress.stage === 'preparing' || uploadProgress.stage === 'signing' || uploadProgress.stage === 'uploading') && (
+                        <div className="mt-3">
+                          <Progress
+                            value={
+                              uploadProgress.stage === 'preparing' ? 25 :
+                              uploadProgress.stage === 'signing' ? 50 :
+                              uploadProgress.stage === 'uploading' ? 75 : 100
+                            }
+                            className="h-2"
+                          />
+                        </div>
+                      )}
+
+                      {/* 에러 시 재시도 버튼 */}
+                      {uploadProgress.stage === 'error' && (
+                        <div className="mt-3 flex gap-2">
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={resetUploadState}
+                            className="text-red-600 border-red-300 hover:bg-red-50"
+                          >
+                            새 업로드 시작
+                          </Button>
+                        </div>
+                      )}
+
+                      {/* 완료 시 새 업로드 버튼 */}
+                      {uploadProgress.stage === 'completed' && (
+                        <div className="mt-3 flex gap-2">
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={resetUploadState}
+                            className="text-green-600 border-green-300 hover:bg-green-50"
+                          >
+                            새 프로젝트 업로드
+                          </Button>
+                        </div>
+                      )}
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+
+                {uploadResponse && uploadProgress.stage === 'completed' && (
                   <motion.div
                     initial={{ opacity: 0, y: 20 }}
                     animate={{ opacity: 1, y: 0 }}
