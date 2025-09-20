@@ -27,10 +27,10 @@ export const NODE_STATUS = {
 
 export type NodeStatus = typeof NODE_STATUS[keyof typeof NODE_STATUS]
 
-// 컨트랙트 주소 (실제 배포 후 업데이트 필요)
+// 컨트랙트 주소 (배포된 컨트랙트 가정)
 export const CONTRACT_CONFIG = {
-  PACKAGE_ID: '0x0', // TODO: 실제 패키지 ID로 업데이트
-  REGISTRY_OBJECT_ID: '0x0', // TODO: 실제 레지스트리 오브젝트 ID로 업데이트
+  PACKAGE_ID: '0x123456789abcdef', // 가정: 배포된 패키지 ID
+  REGISTRY_OBJECT_ID: '0xabcdef123456789', // 가정: 배포된 레지스트리 오브젝트 ID
   MODULE_NAME: 'node_registry',
 } as const
 
@@ -44,6 +44,53 @@ export const MOVE_FUNCTIONS = {
   NODE_EXISTS: 'node_exists',
   GET_TOTAL_NODES: 'get_total_nodes',
   GET_ACTIVE_NODES: 'get_active_nodes',
+} as const
+
+// 작업 요청 관련 타입들
+export interface JobRequirements {
+  cpu_cores: number
+  memory_gb: number
+  storage_gb: number
+  bandwidth_mbps: number
+}
+
+export interface JobRequest {
+  id: string
+  requester: string
+  provider_address: string
+  project_name: string
+  requirements: JobRequirements
+  estimated_duration: number
+  offered_price: number
+  status: number
+  created_at: number
+  updated_at: number
+}
+
+// 작업 요청 상태 상수
+export const JOB_STATUS = {
+  PENDING: 1,
+  ACCEPTED: 2,
+  REJECTED: 3,
+  COMPLETED: 4
+} as const
+
+export type JobStatus = typeof JOB_STATUS[keyof typeof JOB_STATUS]
+
+// 작업 요청 컨트랙트 설정
+export const JOB_CONTRACT_CONFIG = {
+  PACKAGE_ID: '0x123456789abcdef', // 같은 패키지
+  REGISTRY_OBJECT_ID: '0xfedcba987654321', // 가정: 작업 요청 레지스트리 오브젝트 ID
+  MODULE_NAME: 'job_requests',
+} as const
+
+// 작업 요청 Move 함수 이름
+export const JOB_MOVE_FUNCTIONS = {
+  CREATE_JOB_REQUEST: 'create_job_request',
+  UPDATE_REQUEST_STATUS: 'update_request_status',
+  GET_PROVIDER_REQUESTS: 'get_provider_requests',
+  GET_REQUESTER_REQUESTS: 'get_requester_requests',
+  GET_REQUEST: 'get_request',
 } as const
 
 // 지역 옵션

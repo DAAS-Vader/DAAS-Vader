@@ -21,7 +21,7 @@ import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Progress } from '@/components/ui/progress'
 import { WalletInfo } from '@/types'
-import { mockNodeRegistryService } from '@/services/mockNodeService'
+import { nodeRegistryService } from '@/services/nodeRegistry'
 import { REGIONS } from '@/contracts/types'
 
 interface ResourceConfig {
@@ -71,14 +71,22 @@ const NodeSetup: React.FC<NodeSetupProps> = ({ onNodeCreate, onCancel, walletInf
     setError(null)
 
     try {
-      // Mock 서비스를 사용하여 노드 등록
-      await mockNodeRegistryService.registerNode(walletInfo.address, {
-        cpu_cores: resources.cpu,
-        memory_gb: resources.memory,
-        storage_gb: resources.storage,
-        bandwidth_mbps: resources.bandwidth,
-        region: resources.region,
-      })
+      console.log(`🔑 노드 제공자 주소: ${walletInfo.address}`)
+
+      // 실제 컨트랙트 서비스를 사용하여 노드 등록
+      const result = await nodeRegistryService.registerNode(
+        null as any, // TODO: 실제 signer 전달
+        {
+          cpu_cores: resources.cpu,
+          memory_gb: resources.memory,
+          storage_gb: resources.storage,
+          bandwidth_mbps: resources.bandwidth,
+          region: resources.region,
+        }
+      )
+
+      console.log('✅ 노드 등록 완료:', result)
+      console.log(`📝 노드 ${walletInfo.address}가 컨트랙트에 등록되었습니다`)
 
       // 성공 시 대시보드로 이동
       onNodeCreate()
