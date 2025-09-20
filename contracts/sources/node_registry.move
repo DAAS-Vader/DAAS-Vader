@@ -7,7 +7,7 @@ module daas_vader::node_registry {
     use sui::address;
 
     /// 노드 메타데이터 구조체
-    struct NodeMetadata has store, drop {
+    public struct NodeMetadata has store, drop {
         /// CPU 코어 수
         cpu_cores: u32,
         /// 메모리 크기 (GB)
@@ -29,7 +29,7 @@ module daas_vader::node_registry {
     }
 
     /// 노드 레지스트리 (전역 상태)
-    struct NodeRegistry has key {
+    public struct NodeRegistry has key {
         id: UID,
         /// provider_address -> NodeMetadata 매핑
         nodes: Table<address, NodeMetadata>,
@@ -233,5 +233,11 @@ module daas_vader::node_registry {
 
     public fun is_maintenance(metadata: &NodeMetadata): bool {
         metadata.status == NODE_STATUS_MAINTENANCE
+    }
+
+    // === Test-only functions ===
+    #[test_only]
+    public fun test_init(ctx: &mut TxContext) {
+        init(ctx)
     }
 }
