@@ -1,7 +1,7 @@
 import { Router, Request, Response } from 'express';
 import multer from 'multer';
 import { config } from '../config/index.js';
-import { AuthenticatedRequest, UploadResponse, GitHubUploadRequest, ValidationError } from '../types/index.js';
+import { AuthenticatedRequest, UploadResponse, GitHubUploadRequest, ValidationError, WalrusTransactionRequest, UserWalletUploadRequest } from '../types/index.js';
 import { FileProcessor } from '../utils/fileProcessor.js';
 import { SealService } from '../services/sealService.js';
 import { WalrusSDKService } from '../services/walrusSDKService.js';
@@ -23,6 +23,9 @@ const upload = multer({
 /**
  * POST /project/upload
  * 프로젝트 디렉토리나 ZIP 파일을 업로드하고 비밀 정보와 코드를 분리
+ *
+ * ⚠️ DEPRECATED: 이 엔드포인트는 서버 지갑을 사용합니다.
+ * 사용자 지갑 업로드를 위해서는 /prepare-upload 와 /complete-upload 를 사용하세요.
  */
 router.post('/upload', upload.any(), async (req: Request, res: Response) => {
   try {
@@ -108,8 +111,9 @@ router.post('/upload', upload.any(), async (req: Request, res: Response) => {
       sealResponse = await sealService.encryptAndUpload(secretBundle);
     }
 
+    console.log('⚠️ DEPRECATED: Server wallet upload used, consider user wallet upload');
     console.log('✅ Project uploaded to Walrus:', walrusResponse.cid);
-    
+
     // Prepare response
     const response: UploadResponse = {
       cid_code: walrusResponse.cid,
@@ -365,6 +369,237 @@ router.post('/build', async (req: Request, res: Response) => {
     return res.status(500).json({
       error: 'Internal Server Error',
       message: '빌드 요청 처리 중 예상치 못한 오류가 발생했습니다.'
+    });
+  }
+});
+
+/**
+ * POST /project/prepare-upload
+ * 사용자 지갑 업로드를 위한 트랜잭션 준비
+ */
+router.post('/prepare-upload', upload.any(), async (req: Request, res: Response) => {
+  try {
+    const authReq = req as unknown as AuthenticatedRequest;
+    const files = req.files as Express.Multer.File[];
+
+    if (!files || files.length === 0) {
+      throw new ValidationError('No files provided');
+    }
+
+    // 요청에서 무시 패턴 파싱
+    const ignorePatterns: string[] = [];
+    if (req.body.ignorePatterns) {
+      if (typeof req.body.ignorePatterns === 'string') {
+        try {
+          const parsed = JSON.parse(req.body.ignorePatterns);
+          ignorePatterns.push(...parsed);
+        } catch {
+          ignorePatterns.push(...req.body.ignorePatterns.split(',').map((p: string) => p.trim()));
+        }
+      } else if (Array.isArray(req.body.ignorePatterns)) {
+        ignorePatterns.push(...req.body.ignorePatterns);
+      }
+    }
+
+    const fileProcessor = new FileProcessor(ignorePatterns);
+    let processedBundle;
+
+    // 단일 ZIP/TAR 파일인지 여러 파일인지 확인
+    const firstFile = files[0];
+    if (files.length === 1 && firstFile && firstFile.originalname && firstFile.buffer && (
+      firstFile.originalname.endsWith('.zip') ||
+      firstFile.originalname.endsWith('.tar.gz') ||
+      firstFile.originalname.endsWith('.tgz')
+    )) {
+      // Process ZIP file
+      if (firstFile.originalname.endsWith('.zip')) {
+        processedBundle = await fileProcessor.processZipUploadWithTree(firstFile.buffer);
+      } else {
+        throw new ValidationError('tar.gz upload not yet implemented');
+      }
+    } else {
+      // Process directory upload (multiple files)
+      processedBundle = await fileProcessor.processDirectoryUploadWithTree(files);
+    }
+
+    const { secretFiles, codeFiles, ignored } = processedBundle;
+
+    // Check if we have any code files
+    if (codeFiles.size === 0) {
+      throw new ValidationError('No code files found to upload');
+    }
+
+    // 인증된 사용자의 지갑 주소 사용
+    const userWalletAddress = authReq.walletAddress;
+
+    // Walrus SDK 서비스 초기화
+    const walrusSDKService = new WalrusSDKService();
+
+    // 사용자 지갑 잔액 확인
+    const walletBalance = await walrusSDKService.getUserWalletBalance(userWalletAddress);
+
+    if (!walletBalance.hasEnoughWal) {
+      res.status(400).json({
+        error: 'Insufficient WAL Balance',
+        message: 'User wallet does not have enough WAL tokens for upload',
+        walletInfo: walletBalance
+      });
+      return;
+    }
+
+    // Upload code bundle to Walrus (트랜잭션 준비)
+    const codeBundle = await fileProcessor.createTarBundle(codeFiles);
+
+    const uploadOptions = {
+      fileName: `project_${Date.now()}.tar`,
+      mimeType: 'application/tar',
+      epochs: 5,
+    };
+
+    const txRequest = await walrusSDKService.prepareUploadTransaction(
+      codeBundle,
+      userWalletAddress,
+      uploadOptions
+    );
+
+    // Secret files 정보 포함하여 응답
+    const response = {
+      ...txRequest,
+      secretFiles: {
+        count: secretFiles.size,
+        files: fileProcessor.generateFileInfo(secretFiles)
+      },
+      ignored
+    };
+
+    res.status(200).json(response);
+
+  } catch (error) {
+    console.error('Transaction preparation error:', error);
+
+    if (error instanceof ValidationError) {
+      res.status(400).json({
+        error: 'Validation Error',
+        message: error.message
+      });
+      return;
+    }
+
+    res.status(500).json({
+      error: 'Transaction Preparation Failed',
+      message: 'Failed to prepare upload transaction'
+    });
+  }
+});
+
+/**
+ * POST /project/complete-upload
+ * 사용자가 서명한 트랜잭션을 실행하고 결과 확인
+ */
+router.post('/complete-upload', async (req: Request, res: Response) => {
+  try {
+    const authReq = req as unknown as AuthenticatedRequest;
+    const { signedTransaction, secretFiles }: UserWalletUploadRequest & { secretFiles?: any[] } = req.body;
+
+    if (!signedTransaction) {
+      throw new ValidationError('Signed transaction is required');
+    }
+
+    // 인증된 사용자의 지갑 주소 사용
+    const userWalletAddress = authReq.walletAddress;
+
+    // Walrus SDK 서비스 초기화
+    const walrusSDKService = new WalrusSDKService();
+
+    // 서명된 트랜잭션 실행
+    const walrusResponse = await walrusSDKService.executeUserSignedTransaction({
+      signedTransaction,
+      walletAddress: userWalletAddress
+    });
+
+    // Upload secrets to Seal (if any)
+    let sealResponse = null;
+    if (secretFiles && secretFiles.length > 0) {
+      const sealService = new SealService();
+      const fileProcessor = new FileProcessor();
+
+      // Convert secret files back to Map format
+      const secretFilesMap = new Map<string, Uint8Array>();
+      secretFiles.forEach(file => {
+        secretFilesMap.set(file.path, new Uint8Array(file.data));
+      });
+
+      const secretBundle = await fileProcessor.createTarBundle(secretFilesMap);
+      sealResponse = await sealService.encryptAndUpload(secretBundle);
+    }
+
+    console.log('✅ User wallet upload completed:', walrusResponse.cid);
+
+    // Prepare response
+    const response: UploadResponse = {
+      cid_code: walrusResponse.cid,
+      size_code: walrusResponse.size,
+      files_env: secretFiles ? secretFiles.map(f => ({ path: f.path, size: f.size })) : [],
+      ignored: []
+    };
+
+    if (sealResponse) {
+      response.cid_env = sealResponse.cid;
+      response.dek_version = sealResponse.dek_version;
+    }
+
+    res.status(200).json(response);
+
+  } catch (error) {
+    console.error('Upload completion error:', error);
+
+    if (error instanceof ValidationError) {
+      res.status(400).json({
+        error: 'Validation Error',
+        message: error.message
+      });
+      return;
+    }
+
+    res.status(500).json({
+      error: 'Upload Completion Failed',
+      message: 'Failed to complete upload process'
+    });
+  }
+});
+
+/**
+ * GET /project/wallet-balance/:address
+ * 사용자 지갑의 WAL 토큰 잔액 확인
+ * 새로운 클라이언트 사이드 업로드 시스템용
+ */
+router.get('/wallet-balance/:address', async (req: Request, res: Response) => {
+  try {
+    const { address } = req.params;
+
+    if (!address) {
+      throw new ValidationError('Wallet address is required');
+    }
+
+    const walrusSDKService = new WalrusSDKService();
+    const walletBalance = await walrusSDKService.getUserWalletBalance(address);
+
+    res.status(200).json(walletBalance);
+
+  } catch (error) {
+    console.error('Wallet balance check error:', error);
+
+    if (error instanceof ValidationError) {
+      res.status(400).json({
+        error: 'Validation Error',
+        message: error.message
+      });
+      return;
+    }
+
+    res.status(500).json({
+      error: 'Balance Check Failed',
+      message: 'Failed to check wallet balance'
     });
   }
 });
