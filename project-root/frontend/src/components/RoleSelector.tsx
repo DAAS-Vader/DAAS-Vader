@@ -75,9 +75,11 @@ const RoleSelector: React.FC<RoleSelectorProps> = ({ onRoleSelect }) => {
           className="text-center mb-12"
         >
           <div className="flex items-center justify-center gap-3 mb-6">
-            <div className="w-12 h-12 rounded-xl bg-primary flex items-center justify-center">
-              <span className="text-primary-foreground font-bold text-xl">D</span>
-            </div>
+            <img
+              src="/DAAS-VADER.svg"
+              alt="DaaS Platform Logo"
+              className="w-16 h-16"
+            />
             <h1 className="text-4xl font-bold bg-gradient-to-r from-foreground to-foreground/70 bg-clip-text text-transparent">
               DaaS Platform
             </h1>

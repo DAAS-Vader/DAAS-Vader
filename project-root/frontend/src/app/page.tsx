@@ -252,9 +252,11 @@ export default function Home() {
         <div className="max-w-7xl mx-auto px-4 py-4">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
-              <div className="w-8 h-8 rounded-lg bg-primary flex items-center justify-center">
-                <span className="text-primary-foreground font-bold">D</span>
-              </div>
+              <img
+                src="/DAAS-VADER.svg"
+                alt="DaaS Platform Logo"
+                className="w-8 h-8"
+              />
               <h1 className="text-xl font-bold">DaaS Platform</h1>
               <Badge variant="outline" className="ml-2">
                 {selectedRole === 'user' ? '서비스 사용자' : '노드 제공자'}
