@@ -8,7 +8,6 @@ import {
   Upload,
   Settings,
   Activity,
-  ArrowRight,
   CheckCircle
 } from 'lucide-react'
 import { Card } from '@/components/ui/card'
@@ -17,13 +16,14 @@ import { Badge } from '@/components/ui/badge'
 import RoleSelector from '@/components/RoleSelector'
 import { ConnectButton, useCurrentAccount } from '@mysten/dapp-kit'
 import ProjectUpload from '@/components/ProjectUpload'
+import ContractingLoader from '@/components/ContractingLoader'
 import MonitoringDashboard from '@/components/monitoring/MonitoringDashboard'
 import ProviderDashboard from '@/components/provider/ProviderDashboard'
 import { WalletInfo, ProjectUploadData, Deployment } from '@/types'
 import { jobRequestService } from '@/services/jobRequestService'
 
 type UserRole = 'user' | 'provider' | null
-type Step = 'wallet' | 'upload' | 'deploy' | 'monitor'
+type Step = 'wallet' | 'upload' | 'contracting' | 'monitor'
 
 export default function Home() {
   const [selectedRole, setSelectedRole] = useState<UserRole>(null)
@@ -39,7 +39,6 @@ export default function Home() {
   const steps = [
     { id: 'wallet', title: '지갑 연결', icon: Wallet, description: 'Sui 지갑을 연결하여 시작하세요' },
     { id: 'upload', title: '코드 업로드', icon: Upload, description: '프로젝트를 업로드하세요' },
-    { id: 'deploy', title: '배포 설정', icon: Settings, description: '배포 환경을 설정하세요' },
     { id: 'monitor', title: '모니터링', icon: Activity, description: '실시간으로 모니터링하세요' }
   ]
 
@@ -47,7 +46,6 @@ export default function Home() {
     switch (stepId) {
       case 'wallet': return walletInfo !== null
       case 'upload': return projectData !== null
-      case 'deploy': return deployment !== null
       case 'monitor': return deployment !== null
       default: return false
     }
@@ -125,12 +123,12 @@ export default function Home() {
   // New function to handle successful upload completion
   const handleUploadComplete = (uploadResult: { success: boolean; message: string; cid_code?: string; blobId?: string }) => {
     console.log('Upload completed with result:', uploadResult)
-    // Only move to deploy step after upload is actually complete
-    setCurrentStep('deploy')
+    // 업로드 완료 후 자동으로 계약 체결 단계로 이동
+    setCurrentStep('contracting')
   }
 
-  const handleDeploy = () => {
-    // Mock deployment creation
+  const handleContractingComplete = () => {
+    // 계약 체결 완료 후 자동으로 배포 생성 및 모니터링으로 이동
     const mockDeployment: Deployment = {
       id: 'deploy-1',
       projectId: 'project-1',
@@ -216,48 +214,12 @@ export default function Home() {
           />
         )
 
-      case 'deploy':
+      case 'contracting':
         return (
-          <div className="space-y-6">
-            <div className="text-center">
-              <h2 className="text-2xl font-bold mb-2">배포 설정</h2>
-              <p className="text-muted-foreground">
-                선택한 노드에 프로젝트를 배포하기 전 마지막 설정을 확인하세요
-              </p>
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <Card className="p-4">
-                <h3 className="font-semibold mb-3">프로젝트 정보</h3>
-                <div className="space-y-2 text-sm">
-                  <div className="flex justify-between">
-                    <span className="text-muted-foreground">이름:</span>
-                    <span>{projectData?.name}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-muted-foreground">파일 수:</span>
-                    <span>{projectData?.files?.length || 0}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-muted-foreground">런타임:</span>
-                    <span>Node.js</span>
-                  </div>
-                </div>
-              </Card>
-
-            </div>
-
-            <div className="flex justify-center">
-              <Button
-                onClick={handleDeploy}
-                className="bg-primary hover:bg-primary/90"
-                size="lg"
-              >
-                배포 시작
-                <ArrowRight className="w-4 h-4 ml-2" />
-              </Button>
-            </div>
-          </div>
+          <ContractingLoader
+            onComplete={handleContractingComplete}
+            projectName={projectData?.name || 'Your Project'}
+          />
         )
 
       case 'monitor':
