@@ -1,8 +1,8 @@
 // 노드 레지스트리 컨트랙트 연동 서비스
 
-import { SuiClient } from '@mysten/sui.js/client'
-import { TransactionBlock } from '@mysten/sui.js/transactions'
-import { Ed25519Keypair } from '@mysten/sui.js/keypairs/ed25519'
+import { SuiClient } from '@mysten/sui/client'
+import { Transaction } from '@mysten/sui/transactions'
+import { Ed25519Keypair } from '@mysten/sui/keypairs/ed25519'
 import {
   CONTRACT_CONFIG,
   MOVE_FUNCTIONS,
@@ -35,7 +35,7 @@ export class NodeRegistryService {
       region: string
     }
   ): Promise<string> {
-    const txb = new TransactionBlock()
+    const txb = new Transaction()
 
     txb.moveCall({
       target: `${this.packageId}::${CONTRACT_CONFIG.MODULE_NAME}::${MOVE_FUNCTIONS.REGISTER_NODE}`,
@@ -49,7 +49,7 @@ export class NodeRegistryService {
       ],
     })
 
-    const result = await this.suiClient.signAndExecuteTransactionBlock({
+    const result = await this.suiClient.signAndExecuteTransaction({
       signer,
       transactionBlock: txb,
       options: {
@@ -78,7 +78,7 @@ export class NodeRegistryService {
       region: string
     }
   ): Promise<string> {
-    const txb = new TransactionBlock()
+    const txb = new Transaction()
 
     txb.moveCall({
       target: `${this.packageId}::${CONTRACT_CONFIG.MODULE_NAME}::${MOVE_FUNCTIONS.UPDATE_NODE}`,
@@ -92,7 +92,7 @@ export class NodeRegistryService {
       ],
     })
 
-    const result = await this.suiClient.signAndExecuteTransactionBlock({
+    const result = await this.suiClient.signAndExecuteTransaction({
       signer,
       transactionBlock: txb,
       options: {
@@ -114,7 +114,7 @@ export class NodeRegistryService {
     signer: Ed25519Keypair,
     status: number
   ): Promise<string> {
-    const txb = new TransactionBlock()
+    const txb = new Transaction()
 
     txb.moveCall({
       target: `${this.packageId}::${CONTRACT_CONFIG.MODULE_NAME}::${MOVE_FUNCTIONS.UPDATE_NODE_STATUS}`,
@@ -124,7 +124,7 @@ export class NodeRegistryService {
       ],
     })
 
-    const result = await this.suiClient.signAndExecuteTransactionBlock({
+    const result = await this.suiClient.signAndExecuteTransaction({
       signer,
       transactionBlock: txb,
       options: {
@@ -143,7 +143,7 @@ export class NodeRegistryService {
    * 노드 삭제
    */
   async removeNode(signer: Ed25519Keypair): Promise<string> {
-    const txb = new TransactionBlock()
+    const txb = new Transaction()
 
     txb.moveCall({
       target: `${this.packageId}::${CONTRACT_CONFIG.MODULE_NAME}::${MOVE_FUNCTIONS.REMOVE_NODE}`,
@@ -152,7 +152,7 @@ export class NodeRegistryService {
       ],
     })
 
-    const result = await this.suiClient.signAndExecuteTransactionBlock({
+    const result = await this.suiClient.signAndExecuteTransaction({
       signer,
       transactionBlock: txb,
       options: {
@@ -177,7 +177,7 @@ export class NodeRegistryService {
     }
 
     try {
-      const txb = new TransactionBlock()
+      const txb = new Transaction()
 
       txb.moveCall({
         target: `${this.packageId}::${CONTRACT_CONFIG.MODULE_NAME}::${MOVE_FUNCTIONS.NODE_EXISTS}`,
@@ -187,7 +187,7 @@ export class NodeRegistryService {
         ],
       })
 
-      const response = await this.suiClient.devInspectTransactionBlock({
+      const response = await this.suiClient.devInspectTransaction({
         transactionBlock: txb,
         sender: providerAddress,
       })
@@ -209,7 +209,7 @@ export class NodeRegistryService {
     }
 
     try {
-      const txb = new TransactionBlock()
+      const txb = new Transaction()
 
       txb.moveCall({
         target: `${this.packageId}::${CONTRACT_CONFIG.MODULE_NAME}::${MOVE_FUNCTIONS.GET_NODE_METADATA}`,
@@ -219,7 +219,7 @@ export class NodeRegistryService {
         ],
       })
 
-      const response = await this.suiClient.devInspectTransactionBlock({
+      const response = await this.suiClient.devInspectTransaction({
         transactionBlock: txb,
         sender: providerAddress,
       })
@@ -251,7 +251,7 @@ export class NodeRegistryService {
    */
   async getTotalNodes(): Promise<number> {
     try {
-      const txb = new TransactionBlock()
+      const txb = new Transaction()
 
       txb.moveCall({
         target: `${this.packageId}::${CONTRACT_CONFIG.MODULE_NAME}::${MOVE_FUNCTIONS.GET_TOTAL_NODES}`,
@@ -260,7 +260,7 @@ export class NodeRegistryService {
         ],
       })
 
-      const response = await this.suiClient.devInspectTransactionBlock({
+      const response = await this.suiClient.devInspectTransaction({
         transactionBlock: txb,
         sender: '0x0',
       })
@@ -278,7 +278,7 @@ export class NodeRegistryService {
    */
   async getActiveNodes(): Promise<number> {
     try {
-      const txb = new TransactionBlock()
+      const txb = new Transaction()
 
       txb.moveCall({
         target: `${this.packageId}::${CONTRACT_CONFIG.MODULE_NAME}::${MOVE_FUNCTIONS.GET_ACTIVE_NODES}`,
@@ -287,7 +287,7 @@ export class NodeRegistryService {
         ],
       })
 
-      const response = await this.suiClient.devInspectTransactionBlock({
+      const response = await this.suiClient.devInspectTransaction({
         transactionBlock: txb,
         sender: '0x0',
       })

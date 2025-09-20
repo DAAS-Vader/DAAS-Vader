@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useState } from 'react'
+import React, { useState, useEffect } from 'react'
 import { motion } from 'framer-motion'
 import {
   Wallet,
@@ -15,12 +15,12 @@ import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import RoleSelector from '@/components/RoleSelector'
-import WalletConnector from '@/components/wallet/WalletConnector'
+import { ConnectButton, useCurrentAccount } from '@mysten/dapp-kit'
 import NodeSelector from '@/components/nodes/NodeSelector'
 import ProjectUpload from '@/components/ProjectUpload'
 import MonitoringDashboard from '@/components/monitoring/MonitoringDashboard'
 import ProviderDashboard from '@/components/provider/ProviderDashboard'
-import { WalletInfo, WorkerNode, ProjectUploadData, Deployment } from '@/types'
+import { WorkerNode, ProjectUploadData, Deployment } from '@/types'
 
 type UserRole = 'user' | 'provider' | null
 type Step = 'wallet' | 'nodes' | 'upload' | 'deploy' | 'monitor'
@@ -28,10 +28,12 @@ type Step = 'wallet' | 'nodes' | 'upload' | 'deploy' | 'monitor'
 export default function Home() {
   const [selectedRole, setSelectedRole] = useState<UserRole>(null)
   const [currentStep, setCurrentStep] = useState<Step>('wallet')
-  const [walletInfo, setWalletInfo] = useState<WalletInfo | null>(null)
   const [selectedNodes, setSelectedNodes] = useState<WorkerNode[]>([])
   const [projectData, setProjectData] = useState<ProjectUploadData | null>(null)
   const [deployment, setDeployment] = useState<Deployment | null>(null)
+
+  // Get current wallet account from dapp-kit
+  const currentAccount = useCurrentAccount()
 
   const steps = [
     { id: 'wallet', title: '지갑 연결', icon: Wallet, description: 'Sui 지갑을 연결하여 시작하세요' },
@@ -43,7 +45,7 @@ export default function Home() {
 
   const isStepCompleted = (stepId: string) => {
     switch (stepId) {
-      case 'wallet': return walletInfo?.connected
+      case 'wallet': return currentAccount !== null
       case 'nodes': return selectedNodes.length > 0
       case 'upload': return projectData !== null
       case 'deploy': return deployment !== null
@@ -60,18 +62,18 @@ export default function Home() {
     return true
   }
 
-  const handleWalletConnect = (wallet: WalletInfo) => {
-    setWalletInfo(wallet)
-    setCurrentStep('nodes')
-  }
-
-  const handleWalletDisconnect = () => {
-    setWalletInfo(null)
-    setCurrentStep('wallet')
-    setSelectedNodes([])
-    setProjectData(null)
-    setDeployment(null)
-  }
+  // Auto-advance when wallet is connected
+  useEffect(() => {
+    if (currentAccount && currentStep === 'wallet') {
+      setCurrentStep('nodes')
+    } else if (!currentAccount && currentStep !== 'wallet') {
+      // Reset if wallet disconnected
+      setCurrentStep('wallet')
+      setSelectedNodes([])
+      setProjectData(null)
+      setDeployment(null)
+    }
+  }, [currentAccount, currentStep])
 
   const handleNodesSelect = (nodes: WorkerNode[]) => {
     setSelectedNodes(nodes)
@@ -127,7 +129,6 @@ export default function Home() {
   const handleRoleChange = () => {
     setSelectedRole(null)
     setCurrentStep('wallet')
-    setWalletInfo(null)
     setSelectedNodes([])
     setProjectData(null)
     setDeployment(null)
@@ -147,11 +148,23 @@ export default function Home() {
     switch (currentStep) {
       case 'wallet':
         return (
-          <WalletConnector
-            onConnect={handleWalletConnect}
-            onDisconnect={handleWalletDisconnect}
-            currentWallet={walletInfo}
-          />
+          <div className="space-y-6">
+            <Card className="p-6">
+              <h3 className="text-lg font-semibold mb-4">지갑 연결</h3>
+              <p className="text-sm text-muted-foreground mb-6">
+                Sui 네트워크에 연결하려면 지갑을 연결해주세요.
+              </p>
+              <div className="flex justify-center">
+                <ConnectButton className="w-full max-w-sm" />
+              </div>
+              {currentAccount && (
+                <div className="mt-4 p-4 bg-muted rounded-lg">
+                  <p className="text-sm text-muted-foreground">연결된 주소:</p>
+                  <p className="text-xs font-mono mt-1">{currentAccount.address}</p>
+                </div>
+              )}
+            </Card>
+          </div>
         )
 
       case 'nodes':
@@ -178,23 +191,8 @@ export default function Home() {
           <ProjectUpload
             onFileUpload={handleProjectUpload}
             onUploadComplete={handleUploadComplete}
-            onGitHubConnect={async (repo) => {
-              const mockProjectData: ProjectUploadData = {
-                githubRepo: repo.full_name,
-                name: repo.name,
-                description: repo.description || ''
-              }
-              setProjectData(mockProjectData)
-              setCurrentStep('deploy')
-            }}
-            maxFileSize={50 * 1024 * 1024}
-            acceptedFileTypes={[
-              '.js', '.ts', '.jsx', '.tsx', '.py', '.java', '.cpp', '.c', '.go', '.rs',
-              '.json', '.md', '.txt', '.html', '.css', '.scss', '.less',
-              '.php', '.rb', '.kt', '.swift', '.dart', '.vue', '.svelte'
-            ]}
-            backendUrl={process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:3001'}
-            walletInfo={walletInfo}
+            maxFileSize={500 * 1024 * 1024} // 500MB for docker images
+            acceptedFileTypes={['.zip', '.tar.gz', '.tgz', '.tar', '.docker', '.dockerimage']}
           />
         )
 
@@ -280,11 +278,6 @@ export default function Home() {
             </div>
 
             <div className="flex items-center gap-2">
-              {walletInfo?.connected && (
-                <Badge variant="secondary">
-                  {walletInfo.balance.toFixed(2)} SUI
-                </Badge>
-              )}
               <Button
                 variant="ghost"
                 size="sm"
@@ -292,15 +285,6 @@ export default function Home() {
               >
                 역할 변경
               </Button>
-              {walletInfo?.connected && (
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={handleWalletDisconnect}
-                >
-                  연결 해제
-                </Button>
-              )}
             </div>
           </div>
         </div>

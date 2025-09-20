@@ -1,15 +1,14 @@
 'use client'
 
-import React, { useState } from 'react'
+import React, { useState, useEffect } from 'react'
 import { motion } from 'framer-motion'
 import { Wallet, ArrowRight } from 'lucide-react'
 import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
-import WalletConnector from '@/components/wallet/WalletConnector'
+import { ConnectButton, useCurrentAccount } from '@mysten/dapp-kit'
 import NodeSetup from './NodeSetup'
 import NodeOperationDashboard from './NodeOperationDashboard'
-import { WalletInfo } from '@/types'
 
 interface ResourceConfig {
   cpu: number
@@ -27,17 +26,16 @@ interface ProviderDashboardProps {
 
 const ProviderDashboard: React.FC<ProviderDashboardProps> = ({ onRoleChange }) => {
   const [currentView, setCurrentView] = useState<ViewState>('wallet')
-  const [walletInfo, setWalletInfo] = useState<WalletInfo | null>(null)
+  const currentAccount = useCurrentAccount()
 
-  const handleWalletConnect = (wallet: WalletInfo) => {
-    setWalletInfo(wallet)
-    setCurrentView('dashboard')
-  }
-
-  const handleWalletDisconnect = () => {
-    setWalletInfo(null)
-    setCurrentView('wallet')
-  }
+  // Auto-advance when wallet is connected
+  useEffect(() => {
+    if (currentAccount && currentView === 'wallet') {
+      setCurrentView('dashboard')
+    } else if (!currentAccount && currentView !== 'wallet') {
+      setCurrentView('wallet')
+    }
+  }, [currentAccount, currentView])
 
   const handleNodeCreate = () => {
     setCurrentView('node-setup')
@@ -100,11 +98,21 @@ const ProviderDashboard: React.FC<ProviderDashboardProps> = ({ onRoleChange }) =
             </p>
           </motion.div>
 
-          <WalletConnector
-            onConnect={handleWalletConnect}
-            onDisconnect={handleWalletDisconnect}
-            currentWallet={walletInfo}
-          />
+          <Card className="p-6">
+            <h3 className="text-lg font-semibold mb-4">지갑 연결</h3>
+            <p className="text-sm text-muted-foreground mb-6">
+              Sui 네트워크에 연결하여 노드 제공자로 참여하세요.
+            </p>
+            <div className="flex justify-center">
+              <ConnectButton className="w-full max-w-sm" />
+            </div>
+            {currentAccount && (
+              <div className="mt-4 p-4 bg-muted rounded-lg">
+                <p className="text-sm text-muted-foreground">연결된 주소:</p>
+                <p className="text-xs font-mono mt-1">{currentAccount.address}</p>
+              </div>
+            )}
+          </Card>
         </div>
       </div>
     )
