@@ -28,9 +28,10 @@ export const NODE_STATUS = {
 export type NodeStatus = typeof NODE_STATUS[keyof typeof NODE_STATUS]
 
 // 컨트랙트 주소 (배포된 컨트랙트 가정)
+// NOTE: node_registry 컨트랙트가 삭제되었으므로 더미 값 사용 중
 export const CONTRACT_CONFIG = {
-  PACKAGE_ID: '0x123456789abcdef', // 가정: 배포된 패키지 ID
-  REGISTRY_OBJECT_ID: '0xabcdef123456789', // 가정: 배포된 레지스트리 오브젝트 ID
+  PACKAGE_ID: '', // node_registry 컨트랙트 미배포
+  REGISTRY_OBJECT_ID: '', // node_registry 레지스트리 없음
   MODULE_NAME: 'node_registry',
 } as const
 

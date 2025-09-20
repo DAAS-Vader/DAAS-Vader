@@ -183,7 +183,7 @@ export class JobRequestService {
         target: `${this.packageId}::${JOB_CONTRACT_CONFIG.MODULE_NAME}::${JOB_MOVE_FUNCTIONS.GET_REQUESTER_REQUESTS}`,
         arguments: [
           txb.object(this.registryObjectId),
-          txb.pure(userAddress),
+          txb.pure.address(userAddress),
         ],
       })
 

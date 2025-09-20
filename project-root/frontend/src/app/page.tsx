@@ -16,21 +16,18 @@ import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import RoleSelector from '@/components/RoleSelector'
 import { ConnectButton, useCurrentAccount } from '@mysten/dapp-kit'
-import NodeSelector from '@/components/nodes/NodeSelector'
 import ProjectUpload from '@/components/ProjectUpload'
 import MonitoringDashboard from '@/components/monitoring/MonitoringDashboard'
 import ProviderDashboard from '@/components/provider/ProviderDashboard'
-import { WalletInfo, WorkerNode, ProjectUploadData, Deployment } from '@/types'
+import { WalletInfo, ProjectUploadData, Deployment } from '@/types'
 import { jobRequestService } from '@/services/jobRequestService'
-import { JobRequest } from '@/contracts/types'
 
 type UserRole = 'user' | 'provider' | null
-type Step = 'wallet' | 'nodes' | 'upload' | 'deploy' | 'monitor'
+type Step = 'wallet' | 'upload' | 'deploy' | 'monitor'
 
 export default function Home() {
   const [selectedRole, setSelectedRole] = useState<UserRole>(null)
   const [currentStep, setCurrentStep] = useState<Step>('wallet')
-  const [selectedNodes, setSelectedNodes] = useState<WorkerNode[]>([])
   const [projectData, setProjectData] = useState<ProjectUploadData | null>(null)
   const [deployment, setDeployment] = useState<Deployment | null>(null)
   const [isCheckingJobs, setIsCheckingJobs] = useState(false)
@@ -41,7 +38,6 @@ export default function Home() {
 
   const steps = [
     { id: 'wallet', title: '지갑 연결', icon: Wallet, description: 'Sui 지갑을 연결하여 시작하세요' },
-    { id: 'nodes', title: '노드 선택', icon: Server, description: '배포할 워커노드를 선택하세요' },
     { id: 'upload', title: '코드 업로드', icon: Upload, description: '프로젝트를 업로드하세요' },
     { id: 'deploy', title: '배포 설정', icon: Settings, description: '배포 환경을 설정하세요' },
     { id: 'monitor', title: '모니터링', icon: Activity, description: '실시간으로 모니터링하세요' }
@@ -50,7 +46,6 @@ export default function Home() {
   const isStepCompleted = (stepId: string) => {
     switch (stepId) {
       case 'wallet': return walletInfo !== null
-      case 'nodes': return selectedNodes.length > 0
       case 'upload': return projectData !== null
       case 'deploy': return deployment !== null
       case 'monitor': return deployment !== null
@@ -96,13 +91,13 @@ export default function Home() {
         // 활성 작업이 있는 경우 모니터링 단계로 이동
         setCurrentStep('monitor')
       } else {
-        console.log(`📝 활성 작업 없음, 노드 선택 단계로 이동`)
-        setCurrentStep('nodes')
+        console.log(`📝 활성 작업 없음, 업로드 단계로 이동`)
+        setCurrentStep('upload')
       }
     } catch (error) {
       console.error('활성 작업 확인 실패:', error)
-      // 오류 발생 시 기본적으로 노드 선택 단계로 이동
-      setCurrentStep('nodes')
+      // 오류 발생 시 기본적으로 업로드 단계로 이동
+      setCurrentStep('upload')
     } finally {
       setIsCheckingJobs(false)
     }
@@ -111,16 +106,8 @@ export default function Home() {
   const handleWalletDisconnect = () => {
     setWalletInfo(null)
     setCurrentStep('wallet')
-    setSelectedNodes([])
     setProjectData(null)
     setDeployment(null)
-  }
-
-  const handleNodesSelect = (nodes: WorkerNode[]) => {
-    setSelectedNodes(nodes)
-    if (nodes.length > 0) {
-      setCurrentStep('upload')
-    }
   }
 
   const handleProjectUpload = async (files: File[]) => {
@@ -148,7 +135,7 @@ export default function Home() {
       id: 'deploy-1',
       projectId: 'project-1',
       version: 'v1.0.0',
-      nodes: selectedNodes,
+      nodes: [], // 노드 선택 단계가 제거됨
       status: 'running',
       environment: {},
       runtime: 'nodejs',
@@ -170,7 +157,6 @@ export default function Home() {
   const handleRoleChange = () => {
     setSelectedRole(null)
     setCurrentStep('wallet')
-    setSelectedNodes([])
     setProjectData(null)
     setDeployment(null)
   }
@@ -209,25 +195,6 @@ export default function Home() {
               <div className="text-center p-4">
                 <div className="w-6 h-6 border-2 border-primary border-t-transparent rounded-full animate-spin mx-auto mb-2" />
                 <p className="text-muted-foreground text-sm">활성 작업 확인 중...</p>
-              </div>
-            )}
-          </div>
-        )
-
-      case 'nodes':
-        return (
-          <div className="space-y-4">
-            <NodeSelector
-              onSelect={handleNodesSelect}
-              selectedNodes={selectedNodes}
-              maxNodes={3}
-            />
-            {selectedNodes.length > 0 && (
-              <div className="flex justify-end">
-                <Button onClick={() => setCurrentStep('upload')}>
-                  다음 단계
-                  <ArrowRight className="w-4 h-4 ml-2" />
-                </Button>
               </div>
             )}
           </div>
@@ -278,17 +245,6 @@ export default function Home() {
                 </div>
               </Card>
 
-              <Card className="p-4">
-                <h3 className="font-semibold mb-3">선택된 노드</h3>
-                <div className="space-y-2">
-                  {selectedNodes.map(node => (
-                    <div key={node.id} className="flex items-center justify-between text-sm">
-                      <span>{node.name}</span>
-                      <Badge variant="outline">{node.city}</Badge>
-                    </div>
-                  ))}
-                </div>
-              </Card>
             </div>
 
             <div className="flex justify-center">

@@ -20,6 +20,11 @@ export class NodeRegistryService {
     this.suiClient = new SuiClient({ url: rpcUrl })
     this.packageId = CONTRACT_CONFIG.PACKAGE_ID
     this.registryObjectId = CONTRACT_CONFIG.REGISTRY_OBJECT_ID
+
+    // 컨트랙트가 배포되지 않았으면 경고
+    if (!this.packageId || !this.registryObjectId) {
+      console.warn('⚠️ NodeRegistry 컨트랙트가 배포되지 않았습니다. 더미 데이터를 사용합니다.')
+    }
   }
 
   /**
@@ -182,8 +187,8 @@ export class NodeRegistryService {
         ],
       })
 
-      const response = await this.suiClient.devInspectTransactionBlock({
-        transactionBlock: txb,
+      const response = await this.suiClient.devInspectTransaction({
+        transaction: txb,
         sender: providerAddress,
       })
 
@@ -213,8 +218,8 @@ export class NodeRegistryService {
         ],
       })
 
-      const response = await this.suiClient.devInspectTransactionBlock({
-        transactionBlock: txb,
+      const response = await this.suiClient.devInspectTransaction({
+        transaction: txb,
         sender: providerAddress,
       })
 
@@ -259,8 +264,8 @@ export class NodeRegistryService {
         ],
       })
 
-      const response = await this.suiClient.devInspectTransactionBlock({
-        transactionBlock: txb,
+      const response = await this.suiClient.devInspectTransaction({
+        transaction: txb,
         sender: '0x0',
       })
 
@@ -286,8 +291,8 @@ export class NodeRegistryService {
         ],
       })
 
-      const response = await this.suiClient.devInspectTransactionBlock({
-        transactionBlock: txb,
+      const response = await this.suiClient.devInspectTransaction({
+        transaction: txb,
         sender: '0x0',
       })
 
