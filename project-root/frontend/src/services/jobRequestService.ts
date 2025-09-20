@@ -1,8 +1,8 @@
 // 작업 요청 컨트랙트 연동 서비스
 
-import { SuiClient } from '@mysten/sui.js/client'
-import { TransactionBlock } from '@mysten/sui.js/transactions'
-import { Ed25519Keypair } from '@mysten/sui.js/keypairs/ed25519'
+import { SuiClient } from '@mysten/sui/client'
+import { Transaction } from '@mysten/sui/transactions'
+import { Ed25519Keypair } from '@mysten/sui/keypairs/ed25519'
 import {
   JOB_CONTRACT_CONFIG,
   JOB_MOVE_FUNCTIONS,
@@ -42,7 +42,7 @@ export class JobRequestService {
     })
 
     try {
-      const txb = new TransactionBlock()
+      const txb = new Transaction()
 
       txb.moveCall({
         target: `${this.packageId}::${JOB_CONTRACT_CONFIG.MODULE_NAME}::${JOB_MOVE_FUNCTIONS.CREATE_JOB_REQUEST}`,
@@ -61,9 +61,9 @@ export class JobRequestService {
 
       // 실제 환경에서는 signer를 사용하여 트랜잭션을 실행
       if (signer) {
-        const result = await this.suiClient.signAndExecuteTransactionBlock({
+        const result = await this.suiClient.signAndExecuteTransaction({
           signer,
-          transactionBlock: txb,
+          transaction: txb,
           options: {
             showEffects: true,
             showEvents: true,
@@ -119,7 +119,7 @@ export class JobRequestService {
    */
   async getProviderRequests(providerAddress: string): Promise<JobRequest[]> {
     try {
-      const txb = new TransactionBlock()
+      const txb = new Transaction()
 
       txb.moveCall({
         target: `${this.packageId}::${JOB_CONTRACT_CONFIG.MODULE_NAME}::${JOB_MOVE_FUNCTIONS.GET_PROVIDER_REQUESTS}`,
@@ -129,8 +129,8 @@ export class JobRequestService {
         ],
       })
 
-      const response = await this.suiClient.devInspectTransactionBlock({
-        transactionBlock: txb,
+      const response = await this.suiClient.devInspectTransaction({
+        transaction: txb,
         sender: providerAddress,
       })
 
@@ -177,7 +177,7 @@ export class JobRequestService {
    */
   async getUserActiveJobs(userAddress: string): Promise<JobRequest[]> {
     try {
-      const txb = new TransactionBlock()
+      const txb = new Transaction()
 
       txb.moveCall({
         target: `${this.packageId}::${JOB_CONTRACT_CONFIG.MODULE_NAME}::${JOB_MOVE_FUNCTIONS.GET_REQUESTER_REQUESTS}`,
@@ -187,8 +187,8 @@ export class JobRequestService {
         ],
       })
 
-      const response = await this.suiClient.devInspectTransactionBlock({
-        transactionBlock: txb,
+      const response = await this.suiClient.devInspectTransaction({
+        transaction: txb,
         sender: userAddress,
       })
 
