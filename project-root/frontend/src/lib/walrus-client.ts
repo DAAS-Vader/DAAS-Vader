@@ -34,22 +34,8 @@ const WALRUS_CONFIG = {
   aggregator: 'https://aggregator.walrus-testnet.walrus.space'
 };
 
-// SDK initialization state
-interface WalrusSDKInstance {
-  store: (data: Uint8Array, options: { epochs: number; permanent: boolean }) => Promise<{
-    blobId?: string;
-    blob_id?: string;
-    isNew?: boolean;
-  }>;
-  read: (blobId: string) => Promise<Uint8Array>;
-  ping: () => Promise<void>;
-}
-
-let sdkInstance: WalrusSDKInstance | null = null;
-let sdkInitialized = false;
-let sdkInitError: Error | null = null;
-let initializationAttempts = 0;
-const MAX_INIT_ATTEMPTS = 3;
+// SDK is disabled - only using HTTP API
+// SDK initialization variables are kept for future re-enabling but not used
 
 // Retry configuration
 const RETRY_CONFIG = {
@@ -62,188 +48,22 @@ const RETRY_CONFIG = {
 // Helper function for exponential backoff
 const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
-// Initialize Walrus SDK (dynamic import for WASM) with retry logic
+// Initialize Walrus SDK - DISABLED
 const initializeWalrusSDK = async (): Promise<boolean> => {
-  if (sdkInitialized && sdkInstance) {
-    return true;
-  }
-  
-  if (sdkInitError && initializationAttempts >= MAX_INIT_ATTEMPTS) {
-    console.warn('SDK permanently failed after max attempts:', sdkInitError.message);
-    return false;
-  }
-
-  try {
-    console.log(`🚀 Initializing Walrus SDK (attempt ${initializationAttempts + 1}/${MAX_INIT_ATTEMPTS})...`);
-    initializationAttempts++;
-    
-    // Dynamic import to handle WASM loading
-    const { WalrusClient } = await import('@mysten/walrus');
-    const { getFullnodeUrl, SuiClient } = await import('@mysten/sui/client');
-    
-    // Initialize Sui client for testnet
-    const suiClient = new SuiClient({
-      url: getFullnodeUrl('testnet'),
-    });
-    
-    // Initialize SDK with testnet configuration and Sui client
-    // According to docs: WalrusClient needs both network and suiClient
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const client = new (WalrusClient as any)({
-      network: 'testnet',
-      suiClient: suiClient,
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    }) as any;
-    
-    // Debug: WalrusClient 인스턴스 구조 확인
-    console.log('WalrusClient instance:', client);
-    console.log('Available methods:', Object.getOwnPropertyNames(Object.getPrototypeOf(client)));
-    
-    // Wrap the client to match our interface
-    // Based on actual API: only readBlob and getSecondarySliver are available
-    // Store operations will fall back to HTTP API
-    sdkInstance = {
-      store: async (data: Uint8Array, options: { epochs: number; permanent: boolean }) => {
-        try {
-          // Use writeBlob method for uploading to Walrus
-          if (typeof client.writeBlob === 'function') {
-            console.log('📤 Using SDK writeBlob method for upload');
-            const result = await client.writeBlob(data, {
-              epochs: options.epochs || 5,
-              deletionType: options.permanent ? 'permanent' : 'ephemeral'
-            });
-            return result;
-          } else if (typeof client.storeBlob === 'function') {
-            console.log('📤 Using SDK storeBlob method for upload');
-            const result = await client.storeBlob(data, options);
-            return result;
-          } else {
-            console.error('Available methods on client:', Object.getOwnPropertyNames(Object.getPrototypeOf(client)));
-            throw new Error('WalrusClient does not have writeBlob or storeBlob method');
-          }
-        } catch (error) {
-          console.error('SDK upload error:', error);
-          throw error;
-        }
-      },
-      read: async (blobId: string) => {
-        try {
-          // Based on actual API analysis: use readBlob method
-          if (typeof client.readBlob === 'function') {
-            console.log('📥 Using SDK readBlob method for blob:', blobId);
-            const result = await client.readBlob(blobId);
-            return result;
-          } else {
-            console.error('readBlob method not found on client:', client);
-            console.error('Available methods:', Object.getOwnPropertyNames(Object.getPrototypeOf(client)));
-            throw new Error('WalrusClient does not have readBlob method');
-          }
-        } catch (error) {
-          console.error('SDK readBlob error:', error);
-          throw error;
-        }
-      },
-      ping: async () => {
-        try {
-          // SDK ping test: check if readBlob method exists as basic health check
-          if (typeof client.readBlob === 'function') {
-            console.log('✅ SDK health check: readBlob method available');
-            return Promise.resolve();
-          } else {
-            throw new Error('SDK not properly initialized: readBlob method missing');
-          }
-        } catch (error) {
-          console.error('SDK ping error:', error);
-          throw error;
-        }
-      },
-    };
-    
-    // Test SDK functionality with timeout
-    const pingTimeout = new Promise((_, reject) => 
-      setTimeout(() => reject(new Error('SDK ping timeout')), 5000)
-    );
-    
-    await Promise.race([
-      sdkInstance.ping(),
-      pingTimeout
-    ]);
-    
-    sdkInitialized = true;
-    sdkInitError = null;
-    console.log('✅ Walrus SDK initialized successfully');
-    return true;
-  } catch (error) {
-    sdkInitError = error instanceof Error ? error : new Error(String(error));
-    console.error(`❌ SDK initialization attempt ${initializationAttempts} failed:`, sdkInitError);
-    
-    if (initializationAttempts < MAX_INIT_ATTEMPTS) {
-      const delay = Math.min(
-        RETRY_CONFIG.initialDelay * Math.pow(RETRY_CONFIG.backoffMultiplier, initializationAttempts - 1),
-        RETRY_CONFIG.maxDelay
-      );
-      console.log(`⏳ Will retry SDK initialization in ${delay}ms...`);
-      await sleep(delay);
-      return initializeWalrusSDK(); // Recursive retry
-    }
-    
-    console.log('⚠️ SDK initialization failed permanently, will use HTTP API fallback');
-    return false;
-  }
+  // SDK is currently disabled - always use HTTP API
+  console.log('ℹ️ Walrus SDK is disabled, using HTTP API for all operations');
+  return false;
 };
 
-// SDK upload implementation
+// SDK upload implementation - DISABLED
 const uploadViaSDK = async (
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   data: Uint8Array | Blob | File,
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   options?: WalrusUploadOptions
 ): Promise<WalrusUploadResult> => {
-  try {
-    console.log('📤 Using Walrus SDK for upload...');
-    
-    if (!sdkInstance) {
-      throw new Error('SDK not initialized');
-    }
-
-    // Convert data to Uint8Array if needed
-    let uint8Data: Uint8Array;
-    if (data instanceof Uint8Array) {
-      uint8Data = data;
-    } else if (data instanceof Blob) {
-      const buffer = await data.arrayBuffer();
-      uint8Data = new Uint8Array(buffer);
-    } else {
-      throw new Error('Unsupported data type for SDK upload');
-    }
-
-    console.log('📦 SDK upload data size:', uint8Data.length, 'bytes');
-
-    // SDK upload with options
-    const result = await sdkInstance.store(uint8Data, {
-      epochs: options?.epochs || 10,
-      permanent: options?.permanent || false,
-    });
-
-    console.log('✅ SDK upload successful!');
-    console.log('📄 SDK Result:', result);
-
-    const blobId = result.blobId || result.blob_id;
-    
-    if (!blobId) {
-      throw new Error('No blobId received from SDK response');
-    }
-    
-    const downloadUrl = `${WALRUS_CONFIG.aggregator}/v1/blobs/${blobId}`;
-
-    return {
-      status: result.isNew ? 'success' : 'alreadyExists',
-      blobId: blobId,
-      url: downloadUrl,
-      size: uint8Data.length,
-    };
-  } catch (error) {
-    console.error('❌ SDK upload failed:', error);
-    throw error;
-  }
+  // SDK is disabled, always return error to trigger HTTP API fallback
+  throw new Error('SDK is disabled, use HTTP API');
 };
 
 
@@ -402,23 +222,13 @@ export const uploadToWalrus = async (
   }
 };
 
-// SDK read implementation
-const readViaSDK = async (blobId: string): Promise<Uint8Array> => {
-  try {
-    console.log('📥 Using Walrus SDK for read...');
-    
-    if (!sdkInstance) {
-      throw new Error('SDK not initialized');
-    }
-
-    const data = await sdkInstance.read(blobId);
-    
-    console.log('✅ SDK read successful, size:', data.length);
-    return data;
-  } catch (error) {
-    console.error('❌ SDK read failed:', error);
-    throw error;
-  }
+// SDK read implementation - DISABLED
+const readViaSDK = async (
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  blobId: string
+): Promise<Uint8Array> => {
+  // SDK is disabled, always throw error to trigger HTTP API fallback
+  throw new Error('SDK is disabled, use HTTP API');
 };
 
 // HTTP API read implementation

@@ -10,8 +10,10 @@ import { Badge } from '@/components/ui/badge'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Progress } from '@/components/ui/progress'
 import { WalletInfo } from '@/types'
-import { useCurrentAccount } from '@mysten/dapp-kit'
+import { useCurrentAccount, useSignAndExecuteTransaction } from '@mysten/dapp-kit'
 import { uploadToWalrus, type WalrusProjectUploadResult } from '@/lib/walrus-client'
+import { PACKAGE_ID, REGISTRY_ID } from '@/lib/docker-registry'
+import { Transaction } from '@mysten/sui/transactions'
 
 interface FileUpload {
   id: string
@@ -63,6 +65,7 @@ const ProjectUpload: React.FC<ProjectUploadProps> = ({
 }) => {
   // Wallet hooks
   const currentAccount = useCurrentAccount()
+  const { mutate: signAndExecuteTransaction } = useSignAndExecuteTransaction()
 
   const [activeTab, setActiveTab] = useState<'project' | 'docker'>('project')
   const [isDragOver, setIsDragOver] = useState(false)
@@ -104,7 +107,6 @@ const ProjectUpload: React.FC<ProjectUploadProps> = ({
       let parentNode: FileTreeNode | null = null
 
       pathParts.forEach((part, index) => {
-        const previousPath = currentPath
         currentPath = currentPath ? `${currentPath}/${part}` : part
         const isFile = index === pathParts.length - 1
 
@@ -311,12 +313,16 @@ const ProjectUpload: React.FC<ProjectUploadProps> = ({
       }
 
       if (result.status === 'success' || result.status === 'partial') {
+        // Walrus 업로드 성공 후 온체인 등록
+        const blobId = result.codeBlobId || result.dockerBlobId || 'unknown'
+        const downloadUrl = result.codeUrl || result.dockerUrl || 'unknown'
+
         setUploadProgress({
-          stage: 'completed',
-          message: '업로드 완료!',
-          blobId: result.codeBlobId || result.dockerBlobId || 'unknown',
-          txHash: result.codeUrl || result.dockerUrl || 'unknown',
-          percentage: 100
+          stage: 'uploading',
+          message: '블록체인에 등록 중...',
+          blobId: blobId,
+          txHash: downloadUrl,
+          percentage: 80
         })
 
         setUploadResponse(result)
@@ -331,13 +337,106 @@ const ProjectUpload: React.FC<ProjectUploadProps> = ({
           console.log('💾 Docker Blob ID:', result.dockerBlobId)
         }
 
-        if (onUploadComplete) {
-          onUploadComplete({
-            success: true,
-            message: '업로드가 성공적으로 완료되었습니다',
-            cid_code: result.codeBlobId,
-            blobId: result.codeBlobId || result.dockerBlobId
+        // 업로드된 파일 정보를 온체인에 등록 (Docker와 Project 모두)
+        if (downloadUrl !== 'unknown') {
+          try {
+            console.log('📝 온체인 등록 시작...')
+
+            // Transaction 생성
+            const tx = new Transaction()
+
+            // Clock 객체 참조
+            const clockId = '0x6'
+
+            // URL 배열 생성 (백업 URL 포함 가능)
+            const urls = [downloadUrl]
+
+            // Walrus aggregator URL 추가 (백업)
+            if (blobId !== 'unknown') {
+              urls.push(`https://aggregator-devnet.walrus.space/v1/${blobId}`)
+              urls.push(`https://publisher-devnet.walrus.space/v1/${blobId}`)
+            }
+
+            // register_docker_image 함수 호출
+            tx.moveCall({
+              target: `${PACKAGE_ID}::docker_registry::register_docker_image`,
+              arguments: [
+                tx.object(REGISTRY_ID),
+                tx.pure.vector('string', urls),
+                tx.pure.string(imageNam || files[0].name),
+                tx.pure.u64(files.reduce((sum, f) => sum + f.size, 0)),
+                tx.pure.string(activeTab === 'docker' ? 'docker' : 'project'),
+                tx.object(clockId),
+              ],
+            })
+
+            // 트랜잭션 서명 및 실행
+            signAndExecuteTransaction(
+              {
+                transaction: tx,
+              },
+              {
+                onSuccess: (txResult) => {
+                  console.log('✅ 온체인 등록 성공!')
+                  console.log('📜 Transaction digest:', txResult.digest)
+                  console.log('🔍 Explorer URL:', `https://testnet.suivision.xyz/txblock/${txResult.digest}`)
+
+                  setUploadProgress({
+                    stage: 'completed',
+                    message: '업로드 및 온체인 등록 완료!',
+                    blobId: blobId,
+                    txHash: txResult.digest,
+                    percentage: 100
+                  })
+
+                  if (onUploadComplete) {
+                    onUploadComplete({
+                      success: true,
+                      message: `${activeTab === 'docker' ? 'Docker 이미지' : '프로젝트'}가 블록체인에 성공적으로 등록되었습니다`,
+                      cid_code: blobId,
+                      blobId: blobId
+                    })
+                  }
+                },
+                onError: (error) => {
+                  console.error('❌ 온체인 등록 실패:', error)
+                  setUploadProgress({
+                    stage: 'error',
+                    message: `온체인 등록 실패: ${error.message}`,
+                    percentage: 0
+                  })
+                }
+              }
+            )
+          } catch (error) {
+            console.error('트랜잭션 생성 실패:', error)
+            // Walrus 업로드는 성공했지만 온체인 등록 실패
+            setUploadProgress({
+              stage: 'completed',
+              message: 'Walrus 업로드 완료 (온체인 등록 실패)',
+              blobId: blobId,
+              txHash: downloadUrl,
+              percentage: 100
+            })
+          }
+        } else {
+          // 프로젝트 파일인 경우 또는 Docker가 아닌 경우
+          setUploadProgress({
+            stage: 'completed',
+            message: '업로드 완료!',
+            blobId: blobId,
+            txHash: downloadUrl,
+            percentage: 100
           })
+
+          if (onUploadComplete) {
+            onUploadComplete({
+              success: true,
+              message: '업로드가 성공적으로 완료되었습니다',
+              cid_code: result.codeBlobId,
+              blobId: blobId
+            })
+          }
         }
       } else {
         throw new Error(result.error || '업로드 실패')
@@ -353,7 +452,7 @@ const ProjectUpload: React.FC<ProjectUploadProps> = ({
       })
       throw error
     }
-  }, [activeTab, currentAccount, onUploadComplete])
+  }, [activeTab, currentAccount, onUploadComplete, signAndExecuteTransaction])
 
 
   const handleFolderSelect = useCallback((event: React.ChangeEvent<HTMLInputElement>) => {
