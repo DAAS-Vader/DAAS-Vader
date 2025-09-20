@@ -51,23 +51,33 @@ const WalletConnector: React.FC<WalletConnectorProps> = ({
 
   // Generate authentication signature for API calls
   const generateAuthSignature = async (walletAddress: string): Promise<string> => {
+    console.log('🔐 [AUTH] Starting authentication signature generation')
+    console.log('🔐 [AUTH] Wallet Address:', walletAddress)
+
     try {
       const timestamp = Date.now()
       const message = `DaaS Authentication\nTimestamp: ${timestamp}\nWallet: ${walletAddress}`
 
-      console.log('Attempting to sign authentication message:', message)
+      console.log('🔐 [AUTH] Timestamp:', timestamp)
+      console.log('🔐 [AUTH] Message to sign:', message)
+      console.log('🔐 [AUTH] Message bytes length:', new TextEncoder().encode(message).length)
 
       // Sign message for authentication - proper implementation without workarounds
+      console.log('🔐 [AUTH] Calling signPersonalMessage...')
       const signature = await new Promise<string>((resolve, reject) => {
         signPersonalMessage(
           { message: new TextEncoder().encode(message) },
           {
             onSuccess: (result) => {
-              console.log('Successfully signed authentication message:', result)
+              console.log('✅ [AUTH] Signature successful!')
+              console.log('✅ [AUTH] Signature result:', result)
+              console.log('✅ [AUTH] Signature length:', result.signature.length)
               resolve(result.signature)
             },
             onError: (error) => {
-              console.error('Authentication signature failed:', error)
+              console.error('❌ [AUTH] Signature failed:', error)
+              console.error('❌ [AUTH] Error type:', typeof error)
+              console.error('❌ [AUTH] Error message:', error?.message)
               reject(new Error(`Signature failed: ${error?.message || error?.toString() || 'Unknown error'}`))
             }
           }
@@ -81,10 +91,15 @@ const WalletConnector: React.FC<WalletConnectorProps> = ({
         timestamp
       }
 
-      console.log('Generated authentication data:', authData)
+      console.log('✅ [AUTH] Authentication data generated successfully')
+      console.log('✅ [AUTH] Auth data keys:', Object.keys(authData))
+      console.log('✅ [AUTH] Auth data size:', JSON.stringify(authData).length, 'bytes')
+
       return JSON.stringify(authData)
     } catch (error) {
-      console.error('Critical: Failed to generate auth signature:', error)
+      console.error('💥 [AUTH] CRITICAL ERROR in generateAuthSignature')
+      console.error('💥 [AUTH] Error:', error)
+      console.error('💥 [AUTH] Error stack:', error?.stack)
       // Throw error instead of returning null to properly identify the issue
       throw new Error(`Authentication signature required but failed: ${error?.message || error?.toString()}`)
     }
@@ -108,67 +123,112 @@ const WalletConnector: React.FC<WalletConnectorProps> = ({
   ]
 
   const connectWallet = async (walletType: 'Suiet' | 'Slush') => {
-    console.log('Attempting to connect wallet:', walletType)
-    console.log('Available wallets:', wallets)
+    console.log('🔌 [WALLET] Starting wallet connection process')
+    console.log('🔌 [WALLET] Requested wallet type:', walletType)
+    console.log('🔌 [WALLET] Available wallets count:', wallets.length)
+    console.log('🔌 [WALLET] Available wallets:', wallets.map(w => ({ name: w.name, version: w.version })))
+
     setIsConnecting(true)
     setConnectionError(null)
 
     try {
+      console.log('🔍 [WALLET] Searching for target wallet...')
+
       // Find the specific wallet by name
       const targetWallet = wallets.find(wallet => {
         const walletName = wallet.name.toLowerCase()
         const targetType = walletType.toLowerCase()
 
-        return walletName.includes(targetType) ||
+        console.log('🔍 [WALLET] Checking wallet:', walletName, 'against target:', targetType)
+
+        const matches = walletName.includes(targetType) ||
                (targetType === 'suiet' && walletName.includes('suiet')) ||
                (targetType === 'slush' && (walletName.includes('slush') || walletName.includes('slush wallet')))
+
+        console.log('🔍 [WALLET] Match result:', matches)
+        return matches
       })
 
       if (!targetWallet) {
+        console.error('❌ [WALLET] Target wallet not found')
+        console.error('❌ [WALLET] Requested:', walletType)
+        console.error('❌ [WALLET] Available:', wallets.map(w => w.name))
         throw new Error(`${walletType} 지갑을 찾을 수 없습니다. 브라우저에 확장프로그램이 설치되어 있는지 확인해주세요.`)
       }
 
-      console.log('Connecting to wallet:', targetWallet)
+      console.log('✅ [WALLET] Target wallet found:', targetWallet.name)
+      console.log('✅ [WALLET] Wallet details:', {
+        name: targetWallet.name,
+        version: targetWallet.version,
+        accounts: targetWallet.accounts?.length || 0
+      })
 
       // Connect to specific wallet using mysten dapp-kit
+      console.log('🔗 [WALLET] Initiating connection...')
       connect(
         { wallet: targetWallet },
         {
           onSuccess: () => {
-            console.log('Wallet connection successful')
+            console.log('🎉 [WALLET] Connection successful!')
+            console.log('🎉 [WALLET] Setting isConnecting to false')
             setIsConnecting(false)
           },
           onError: (error) => {
-            console.error('Wallet connection failed:', error)
-            setConnectionError(`지갑 연결에 실패했습니다. ${error?.message || error?.toString() || ''} 브라우저에 지갑 확장프로그램이 설치되어 있는지 확인해주세요.`)
+            console.error('💥 [WALLET] Connection failed in onError callback')
+            console.error('💥 [WALLET] Error details:', error)
+            console.error('💥 [WALLET] Error type:', typeof error)
+            console.error('💥 [WALLET] Error message:', error?.message)
+
+            const errorMessage = `지갑 연결에 실패했습니다. ${error?.message || error?.toString() || ''} 브라우저에 지갑 확장프로그램이 설치되어 있는지 확인해주세요.`
+            console.error('💥 [WALLET] Formatted error message:', errorMessage)
+
+            setConnectionError(errorMessage)
             setIsConnecting(false)
           }
         }
       )
     } catch (error) {
-      console.error('Wallet connection failed:', error)
-      setConnectionError(`지갑 연결에 실패했습니다. ${error?.message || error?.toString() || ''} 브라우저에 지갑 확장프로그램이 설치되어 있는지 확인해주세요.`)
+      console.error('💥 [WALLET] Exception in connectWallet function')
+      console.error('💥 [WALLET] Error:', error)
+      console.error('💥 [WALLET] Error stack:', error?.stack)
+
+      const errorMessage = `지갑 연결에 실패했습니다. ${error?.message || error?.toString() || ''} 브라우저에 지갑 확장프로그램이 설치되어 있는지 확인해주세요.`
+      console.error('💥 [WALLET] Setting error message:', errorMessage)
+
+      setConnectionError(errorMessage)
       setIsConnecting(false)
     }
   }
 
   // Effect to handle wallet connection state changes
   useEffect(() => {
+    console.log('🔄 [EFFECT] useEffect triggered')
+    console.log('🔄 [EFFECT] currentAccount:', currentAccount)
+    console.log('🔄 [EFFECT] isDisconnecting:', isDisconnecting)
+    console.log('🔄 [EFFECT] isConnecting:', isConnecting)
+
     const handleWalletConnection = async () => {
+      console.log('🔄 [EFFECT] handleWalletConnection called')
+
       // Don't handle connection if we're in the process of disconnecting
       if (isDisconnecting) {
+        console.log('🔄 [EFFECT] Skipping - currently disconnecting')
         return
       }
 
       if (currentAccount && currentAccount.address) {
+        console.log('🔄 [EFFECT] Current account found, initializing wallet')
+        console.log('🔄 [EFFECT] Account address:', currentAccount.address)
+
         try {
           // Get wallet balance - simplified for now
           let suiBalance = 0
-          // Default balance - would need to fetch from RPC
-          suiBalance = 0
+          console.log('🔄 [EFFECT] Setting balance to:', suiBalance)
 
           // Generate auth signature for API calls
+          console.log('🔄 [EFFECT] Generating auth signature...')
           const authSignature = await generateAuthSignature(currentAccount.address)
+          console.log('🔄 [EFFECT] Auth signature generated successfully')
 
           const walletInfo: WalletInfo = {
             connected: true,
@@ -178,19 +238,36 @@ const WalletConnector: React.FC<WalletConnectorProps> = ({
             authSignature
           }
 
+          console.log('🔄 [EFFECT] Wallet info created:', {
+            ...walletInfo,
+            authSignature: authSignature.substring(0, 50) + '...'
+          })
+
+          console.log('🔄 [EFFECT] Calling onConnect...')
           onConnect(walletInfo)
           setIsConnecting(false)
+          console.log('🔄 [EFFECT] Wallet connection process completed')
         } catch (error) {
-          console.error('Failed to initialize wallet:', error)
+          console.error('💥 [EFFECT] Failed to initialize wallet:', error)
+          console.error('💥 [EFFECT] Error type:', typeof error)
+          console.error('💥 [EFFECT] Error message:', error?.message)
+
           if (error?.message?.includes('Authentication signature required')) {
-            setConnectionError(`인증 서명에 실패했습니다: ${error.message}`)
+            const errorMsg = `인증 서명에 실패했습니다: ${error.message}`
+            console.error('💥 [EFFECT] Auth signature error:', errorMsg)
+            setConnectionError(errorMsg)
           } else {
-            setConnectionError(`지갑 초기화에 실패했습니다: ${error?.message || error?.toString() || '알 수 없는 오류'}`)
+            const errorMsg = `지갑 초기화에 실패했습니다: ${error?.message || error?.toString() || '알 수 없는 오류'}`
+            console.error('💥 [EFFECT] General initialization error:', errorMsg)
+            setConnectionError(errorMsg)
           }
           setIsConnecting(false)
         }
       } else if (!currentAccount && !isDisconnecting) {
+        console.log('🔄 [EFFECT] No current account and not disconnecting, setting isConnecting to false')
         setIsConnecting(false)
+      } else {
+        console.log('🔄 [EFFECT] No action needed')
       }
     }
 
@@ -198,21 +275,37 @@ const WalletConnector: React.FC<WalletConnectorProps> = ({
   }, [currentAccount, isDisconnecting, onConnect])
 
   const disconnectWallet = async () => {
+    console.log('🔌 [DISCONNECT] Starting wallet disconnection')
+    console.log('🔌 [DISCONNECT] Current account before disconnect:', currentAccount?.address)
+
     setIsDisconnecting(true)
     try {
       // Clear local storage to prevent auto-reconnection
+      console.log('🔌 [DISCONNECT] Clearing localStorage...')
       localStorage.removeItem('daas-wallet')
 
+      console.log('🔌 [DISCONNECT] Calling disconnect()...')
       disconnect()
+
+      console.log('🔌 [DISCONNECT] Calling onDisconnect()...')
       onDisconnect()
+
+      console.log('🔌 [DISCONNECT] Clearing connection error...')
       setConnectionError(null)
 
       // Keep disconnecting state for a moment to prevent immediate reconnection
+      console.log('🔌 [DISCONNECT] Setting timeout to reset disconnecting state...')
       setTimeout(() => {
+        console.log('🔌 [DISCONNECT] Timeout completed, setting isDisconnecting to false')
         setIsDisconnecting(false)
       }, 1000)
+
+      console.log('🔌 [DISCONNECT] Disconnection process completed')
     } catch (error) {
-      console.error('Failed to disconnect wallet:', error)
+      console.error('💥 [DISCONNECT] Failed to disconnect wallet:', error)
+      console.error('💥 [DISCONNECT] Error type:', typeof error)
+      console.error('💥 [DISCONNECT] Error message:', (error as any)?.message)
+
       setConnectionError('지갑 연결 해제에 실패했습니다.')
       setIsDisconnecting(false)
     }
