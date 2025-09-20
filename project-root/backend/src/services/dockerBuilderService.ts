@@ -3,7 +3,7 @@ import fs from 'fs/promises';
 import path from 'path';
 import crypto from 'crypto';
 import * as tar from 'tar';
-import { walrusService } from './walrusService.js';
+import { WalrusSDKService } from './walrusSDKService.js';
 import { ServiceError } from '../types/index.js';
 
 interface BuildRequest {
@@ -241,7 +241,8 @@ export class DockerBuilderService {
     await fs.mkdir(buildPath, { recursive: true });
 
     // Walrus에서 번들 다운로드
-    const bundleData = await walrusService.downloadBundle(bundleId);
+    const walrusSDKService = new WalrusSDKService();
+    const bundleData = await walrusSDKService.downloadBundle(bundleId);
     
     // tar.gz 번들 압축 해제
     const extractPath = path.join(buildPath, 'src');

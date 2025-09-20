@@ -4,9 +4,10 @@ import { config } from '../config/index.js';
 import { AuthenticatedRequest, UploadResponse, GitHubUploadRequest, ValidationError } from '../types/index.js';
 import { FileProcessor } from '../utils/fileProcessor.js';
 import { SealService } from '../services/sealService.js';
-import { walrusService } from '../services/walrusService.js';
+import { WalrusSDKService } from '../services/walrusSDKService.js';
 import { GitHubService } from '../services/githubService.js';
-import { NautilusService } from '../services/nautilusService.js';
+import { DockerBuilderService } from '../services/dockerBuilderService.js';
+import { getBuildMonitoringIntegration } from '../services/buildMonitoringIntegration.js';
 
 const router = Router();
 
@@ -94,7 +95,8 @@ router.post('/upload', upload.any(), async (req: Request, res: Response) => {
       userKeypairSeed, // 사용자의 니모닉 (선택사항)
     };
 
-    const walrusResponse = await walrusService.uploadCodeBundle(codeBundle, uploadOptions);
+    const walrusSDKService = new WalrusSDKService();
+    const walrusResponse = await walrusSDKService.uploadCodeBundle(codeBundle, uploadOptions);
 
     // 인증된 사용자의 지갑 주소 사용
     const walletAddress = authReq.walletAddress;
@@ -200,7 +202,8 @@ router.post('/from-github', async (req: Request, res: Response) => {
       epochs: 5,
     };
 
-    const walrusResponse = await walrusService.uploadCodeBundle(codeBundle, uploadOptions);
+    const walrusSDKService = new WalrusSDKService();
+    const walrusResponse = await walrusSDKService.uploadCodeBundle(codeBundle, uploadOptions);
     
     // Upload secrets to Seal (if any)
     let sealResponse = null;
@@ -249,7 +252,7 @@ router.post('/from-github', async (req: Request, res: Response) => {
 
 /**
  * POST /project/build
- * Nautilus 보안 엔클레이브를 통한 컨테이너 빌드
+ * Docker Builder Service를 통한 컨테이너 빌드
  */
 router.post('/build', async (req: Request, res: Response) => {
   try {
@@ -266,38 +269,22 @@ router.post('/build', async (req: Request, res: Response) => {
 
     // 서비스 초기화
     // Use Walrus SDK service for consistency
-    const nautilusService = new NautilusService();
+    const dockerBuilderService = new DockerBuilderService();
 
-    // 1. Nautilus 기능 확인 (환경 변수로 비활성화 가능)
-    const isNautilusEnabled = process.env.ENABLE_NAUTILUS === 'true';
-    let isNautilusAvailable = false;
-
-    if (isNautilusEnabled) {
-      isNautilusAvailable = await nautilusService.healthCheck();
-      if (!isNautilusAvailable) {
-        console.warn('⚠️ Nautilus 서버를 사용할 수 없습니다. Docker Builder Service로 폴백합니다.');
-      }
-    } else {
-      console.info('ℹ️ Nautilus 기능이 비활성화되어 있습니다. Docker Builder Service를 사용합니다.');
-    }
-
-    if (!isNautilusAvailable) {
-      // Check if Docker Builder Service is available as fallback
-      const dockerBuilderAvailable = await nautilusService.checkDockerBuilderHealth();
-      if (!dockerBuilderAvailable) {
-        return res.status(503).json({
-          error: 'Service Unavailable',
-          message: isNautilusEnabled
-            ? 'Nautilus 보안 빌드 서버와 Docker Builder Service 모두 사용할 수 없습니다.'
-            : 'Docker Builder Service를 사용할 수 없습니다. (Nautilus는 비활성화됨)'
-        });
-      }
+    // 1. Docker Builder Service 상태 확인
+    const dockerBuilderAvailable = await dockerBuilderService.healthCheck();
+    if (!dockerBuilderAvailable) {
+      return res.status(503).json({
+        error: 'Service Unavailable',
+        message: 'Docker Builder Service를 사용할 수 없습니다.'
+      });
     }
 
     // 2. Walrus에서 코드 번들 다운로드
     let codeBundle: Buffer;
     try {
-      codeBundle = await walrusService.downloadBundle(bundleId);
+      const walrusSDKService = new WalrusSDKService();
+      codeBundle = await walrusSDKService.downloadBundle(bundleId);
       console.log('✅ Walrus에서 코드 번들 다운로드 완료:', codeBundle.length, 'bytes');
     } catch (error) {
       console.error('❌ Walrus 다운로드 실패:', error);
@@ -307,43 +294,48 @@ router.post('/build', async (req: Request, res: Response) => {
       });
     }
 
-    // 3. 보안 빌드 실행 (Nautilus 또는 Docker Builder Service)
+    // 3. Docker 빌드 실행
     try {
-      let buildResult;
-      let buildLogs: string[] = [];
-      let buildMethod = 'unknown';
-
-      if (isNautilusAvailable) {
-        // Nautilus 보안 빌드 사용
-        buildMethod = 'nautilus';
-        buildResult = await nautilusService.secureBuild(bundleId, walletAddress);
-        buildLogs = await nautilusService.getBuildLogs(buildResult.buildHash);
-      } else {
-        // Docker Builder Service 폴백 사용
-        buildMethod = 'docker-builder';
-        const buildId = await nautilusService.buildWithDockerService(bundleId, walletAddress, {
+      const buildId = await dockerBuilderService.startBuild({
+        bundleId,
+        buildOptions: {
           platform: 'linux/amd64',
           labels: {
             'daas.wallet': walletAddress,
-            'daas.fallback': 'true',
-            'daas.reason': 'nautilus-unavailable'
+            'daas.timestamp': Date.now().toString(),
+            'daas.service': 'docker-builder'
           }
-        });
+        }
+      });
 
-        // Docker 빌드 상태 확인
-        const buildStatus = await nautilusService.getDockerBuildStatus(buildId);
-        buildResult = {
-          imageUrl: `docker-builder://${buildId}`,
-          buildHash: buildId,
-          attestation: 'docker-builder-fallback' // Docker Builder에는 Nautilus 스타일 증명 없음
-        };
-        buildLogs = buildStatus?.logs || [];
-      }
+      // 모니터링 연동 (이전 BuildService에서 하던 일)
+      const monitoringIntegration = getBuildMonitoringIntegration();
+      setImmediate(async () => {
+        try {
+          // 기본 빌드 노드 정보로 모니터링 설정
+          await monitoringIntegration.onBuildComplete(buildId, [{
+            nodeId: `build-${buildId}`,
+            nodeIp: 'localhost',
+            nodeName: 'local-builder',
+            nodeType: 'build-runtime' as const
+          }]);
+        } catch (error) {
+          console.error('Failed to setup monitoring:', error);
+        }
+      });
 
-      console.log(`✅ ${buildMethod} 빌드 완료:`, {
+      // Docker 빌드 상태 확인
+      const buildStatus = await dockerBuilderService.getBuildStatus(buildId);
+      const buildResult = {
+        imageUrl: `docker-builder://${buildId}`,
+        buildHash: buildId,
+        attestation: 'docker-builder'
+      };
+      const buildLogs = buildStatus?.logs || [];
+
+      console.log('✅ Docker 빌드 완료:', {
         imageUrl: buildResult.imageUrl,
-        buildHash: buildResult.buildHash.substring(0, 16) + '...',
-        method: buildMethod
+        buildHash: buildResult.buildHash.substring(0, 16) + '...'
       });
 
       return res.status(200).json({
@@ -354,17 +346,15 @@ router.post('/build', async (req: Request, res: Response) => {
         logs: buildLogs,
         walletAddress,
         timestamp: Date.now(),
-        buildMethod,
-        message: buildMethod === 'nautilus'
-          ? 'Nautilus 보안 엔클레이브에서 빌드가 완료되었습니다.'
-          : 'Docker Builder Service를 통한 빌드가 완료되었습니다. (Nautilus 대신 사용)'
+        buildMethod: 'docker-builder',
+        message: 'Docker Builder Service를 통한 빌드가 완료되었습니다.'
       });
 
     } catch (error) {
-      console.error('❌ Nautilus 빌드 실패:', error);
+      console.error('❌ Docker 빌드 실패:', error);
       return res.status(500).json({
         error: 'Build Failed',
-        message: error instanceof Error ? error.message : 'Nautilus 보안 빌드 중 오류가 발생했습니다.',
+        message: error instanceof Error ? error.message : 'Docker 빌드 중 오류가 발생했습니다.',
         bundleId,
         walletAddress
       });
