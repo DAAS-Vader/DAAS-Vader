@@ -19,6 +19,21 @@ export const config: Config = {
     serviceToken: process.env.SEAL_SERVICE_TOKEN || 'server-token',
     ticketSecret: process.env.SEAL_TICKET_SECRET || 'shared-hs256-secret'
   },
+
+  // Seal v2 (Move Contracts)
+  sealV2: {
+    packageId: process.env.SEAL_PACKAGE_ID,
+    sealRegistryId: process.env.SEAL_REGISTRY_ID,
+    enclaveRegistryId: process.env.ENCLAVE_REGISTRY_ID,
+    adminPrivateKey: process.env.ADMIN_PRIVATE_KEY,
+    defaultIdentity: process.env.DEFAULT_IDENTITY
+  },
+
+  // Sui Configuration
+  sui: {
+    rpcUrl: process.env.SUI_RPC_URL || 'https://fullnode.testnet.sui.io:443',
+    networkType: process.env.SUI_NETWORK || 'testnet'
+  },
   
   walrus: {
     // SDK configuration
