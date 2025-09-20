@@ -45,7 +45,8 @@ export default function Home() {
   const isStepCompleted = (stepId: string) => {
     switch (stepId) {
       case 'wallet': return walletInfo !== null
-      case 'upload': return projectData !== null
+      case 'upload': return currentStep === 'contracting' || currentStep === 'monitor' || projectData !== null
+      case 'contracting': return currentStep === 'monitor' || deployment !== null
       case 'monitor': return deployment !== null
       default: return false
     }
@@ -122,12 +123,19 @@ export default function Home() {
 
   // New function to handle successful upload completion
   const handleUploadComplete = (uploadResult: { success: boolean; message: string; cid_code?: string; blobId?: string }) => {
-    console.log('Upload completed with result:', uploadResult)
-    // 업로드 완료 후 자동으로 계약 체결 단계로 이동
-    setCurrentStep('contracting')
+    console.log('🎯 handleUploadComplete called with result:', uploadResult)
+
+    if (uploadResult.success) {
+      console.log('✅ Upload successful, moving to contracting step')
+      // 업로드 완료 후 자동으로 계약 체결 단계로 이동
+      setCurrentStep('contracting')
+    } else {
+      console.log('❌ Upload failed:', uploadResult.message)
+    }
   }
 
   const handleContractingComplete = () => {
+    console.log('handleContractingComplete called!')
     // 계약 체결 완료 후 자동으로 배포 생성 및 모니터링으로 이동
     const mockDeployment: Deployment = {
       id: 'deploy-1',
@@ -144,7 +152,9 @@ export default function Home() {
       },
       createdAt: new Date()
     }
+    console.log('Setting deployment:', mockDeployment)
     setDeployment(mockDeployment)
+    console.log('Setting current step to monitor')
     setCurrentStep('monitor')
   }
 

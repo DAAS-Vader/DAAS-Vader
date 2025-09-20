@@ -21,22 +21,43 @@ const ContractingLoader: React.FC<ContractingLoaderProps> = ({ onComplete, proje
   ]
 
   useEffect(() => {
+    console.log('ContractingLoader useEffect - currentStep:', currentStep, 'isComplete:', isComplete)
     let timer: NodeJS.Timeout
 
     if (currentStep < steps.length) {
+      console.log('Setting timer for next step, duration:', steps[currentStep].duration)
       timer = setTimeout(() => {
-        setCurrentStep(currentStep + 1)
+        setCurrentStep(prev => prev + 1)
       }, steps[currentStep].duration)
     } else if (currentStep === steps.length && !isComplete) {
       // 모든 단계 완료 후 성공 메시지 표시
+      console.log('All steps completed, showing success message')
       setIsComplete(true)
-      timer = setTimeout(() => {
-        onComplete()
-      }, 1500) // 성공 메시지 1.5초 표시 후 이동
     }
 
-    return () => clearTimeout(timer)
-  }, [currentStep, isComplete, onComplete])
+    return () => {
+      if (timer) {
+        console.log('Cleaning up timer')
+        clearTimeout(timer)
+      }
+    }
+  }, [currentStep, steps.length])
+
+  // 별도의 useEffect로 완료 후 이동 처리
+  useEffect(() => {
+    if (isComplete) {
+      console.log('Component is complete, setting timer for onComplete')
+      const completeTimer = setTimeout(() => {
+        console.log('Calling onComplete after 1 second!')
+        onComplete()
+      }, 1000) // 성공 메시지 1초 표시 후 이동
+
+      return () => {
+        console.log('Cleaning up complete timer')
+        clearTimeout(completeTimer)
+      }
+    }
+  }, [isComplete, onComplete])
 
   return (
     <div className="flex flex-col items-center justify-center min-h-[400px] space-y-8">

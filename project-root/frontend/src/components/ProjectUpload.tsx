@@ -390,12 +390,15 @@ const ProjectUpload: React.FC<ProjectUploadProps> = ({
                   })
 
                   if (onUploadComplete) {
+                    console.log('🚀 Calling onUploadComplete from ProjectUpload (blockchain registered)')
                     onUploadComplete({
                       success: true,
                       message: `${activeTab === 'docker' ? 'Docker 이미지' : '프로젝트'}가 블록체인에 성공적으로 등록되었습니다`,
                       cid_code: blobId,
                       blobId: blobId
                     })
+                  } else {
+                    console.log('⚠️ onUploadComplete callback is not provided!')
                   }
                 },
                 onError: (error) => {
@@ -430,12 +433,15 @@ const ProjectUpload: React.FC<ProjectUploadProps> = ({
           })
 
           if (onUploadComplete) {
+            console.log('🚀 Calling onUploadComplete from ProjectUpload (walrus only)')
             onUploadComplete({
               success: true,
               message: '업로드가 성공적으로 완료되었습니다',
               cid_code: result.codeBlobId,
               blobId: blobId
             })
+          } else {
+            console.log('⚠️ onUploadComplete callback is not provided!')
           }
         }
       } else {
