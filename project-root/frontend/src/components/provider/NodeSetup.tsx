@@ -29,7 +29,6 @@ interface ResourceConfig {
   memory: number
   storage: number
   bandwidth: number
-  pricePerHour: number
   region: string
 }
 
@@ -46,7 +45,6 @@ const NodeSetup: React.FC<NodeSetupProps> = ({ onNodeCreate, onCancel, walletInf
     memory: 8,
     storage: 100,
     bandwidth: 1000,
-    pricePerHour: 0.05,
     region: 'Asia-Seoul'
   })
 
@@ -55,7 +53,7 @@ const NodeSetup: React.FC<NodeSetupProps> = ({ onNodeCreate, onCancel, walletInf
 
   const updateResource = (key: keyof ResourceConfig, increment: boolean) => {
     setResources(prev => {
-      const step = key === 'pricePerHour' ? 0.01 : key === 'bandwidth' ? 100 : 1
+      const step = key === 'bandwidth' ? 100 : 1
       const newValue = increment ? prev[key] + step : Math.max(0, prev[key] - step)
       return { ...prev, [key]: newValue }
     })
@@ -98,9 +96,6 @@ const NodeSetup: React.FC<NodeSetupProps> = ({ onNodeCreate, onCancel, walletInf
     }
   }
 
-  const estimatedMonthlyRevenue = resources.pricePerHour * 24 * 30 * 0.7 // 70% 가동률 기준
-  const marketAvgPrice = 0.06 // 시장 평균 가격
-  const priceCompetitiveness = resources.pricePerHour <= marketAvgPrice ? 'competitive' : 'high'
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-background via-background to-muted/20 p-6">
@@ -355,92 +350,6 @@ const NodeSetup: React.FC<NodeSetupProps> = ({ onNodeCreate, onCancel, walletInf
                     선택한 지역에서 컴퓨팅 자원을 제공합니다
                   </p>
                 </div>
-              </div>
-            </div>
-          </Card>
-
-          {/* Pricing */}
-          <Card className="p-8 mb-6">
-            <h3 className="text-xl font-semibold mb-6">가격 설정</h3>
-
-            <div className="flex items-center justify-center gap-8">
-              <div className="text-center">
-                <div className="flex items-center gap-2 mb-4">
-                  <Coins className="w-5 h-5 text-green-500" />
-                  <span className="font-medium">시간당 가격</span>
-                </div>
-                <div className="flex items-center gap-4">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => updateResource('pricePerHour', false)}
-                    disabled={resources.pricePerHour <= 0.01}
-                  >
-                    <Minus className="w-4 h-4" />
-                  </Button>
-                  <div className="text-center min-w-24">
-                    <span className="text-3xl font-bold text-green-600">
-                      {resources.pricePerHour.toFixed(2)}
-                    </span>
-                    <p className="text-sm text-muted-foreground">SUI/시간</p>
-                  </div>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => updateResource('pricePerHour', true)}
-                    disabled={resources.pricePerHour >= 1}
-                  >
-                    <Plus className="w-4 h-4" />
-                  </Button>
-                </div>
-
-                <div className="mt-4 flex items-center gap-2">
-                  <div className={`w-2 h-2 rounded-full ${
-                    priceCompetitiveness === 'competitive' ? 'bg-green-500' : 'bg-yellow-500'
-                  }`} />
-                  <span className="text-sm text-muted-foreground">
-                    {priceCompetitiveness === 'competitive' ? '경쟁력 있는 가격' : '평균보다 높은 가격'}
-                  </span>
-                </div>
-              </div>
-            </div>
-          </Card>
-
-          {/* Revenue Estimation */}
-          <Card className="p-8 mb-8">
-            <h3 className="text-xl font-semibold mb-6">예상 수익</h3>
-
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-              <div className="text-center">
-                <p className="text-sm text-muted-foreground mb-2">일일 예상 수익</p>
-                <p className="text-2xl font-bold text-green-600">
-                  {(estimatedMonthlyRevenue / 30).toFixed(2)} SUI
-                </p>
-              </div>
-              <div className="text-center">
-                <p className="text-sm text-muted-foreground mb-2">월 예상 수익</p>
-                <p className="text-2xl font-bold text-green-600">
-                  {estimatedMonthlyRevenue.toFixed(2)} SUI
-                </p>
-              </div>
-              <div className="text-center">
-                <p className="text-sm text-muted-foreground mb-2">연 예상 수익</p>
-                <p className="text-2xl font-bold text-green-600">
-                  {(estimatedMonthlyRevenue * 12).toFixed(2)} SUI
-                </p>
-              </div>
-            </div>
-
-            <div className="mt-6 p-4 bg-blue-50 dark:bg-blue-950/20 rounded-lg flex items-start gap-3">
-              <Info className="w-5 h-5 text-blue-500 mt-0.5" />
-              <div>
-                <p className="text-sm font-medium text-blue-700 dark:text-blue-300">
-                  수익 예상치 안내
-                </p>
-                <p className="text-sm text-blue-600 dark:text-blue-400 mt-1">
-                  실제 수익은 네트워크 수요, 노드 성능, 가동률 등에 따라 달라질 수 있습니다.
-                  위 수치는 70% 가동률을 기준으로 한 추정값입니다.
-                </p>
               </div>
             </div>
           </Card>

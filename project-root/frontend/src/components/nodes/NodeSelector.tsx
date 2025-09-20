@@ -78,7 +78,15 @@ const NodeSelector: React.FC<NodeSelectorProps> = ({
 
   // NodeMetadata를 WorkerNode로 변환하는 함수
   const convertNodeMetadataToWorkerNode = (metadata: NodeMetadata): WorkerNode => {
-    const regionMap: Record<string, { region: string, country: string, city: string, lat: number, lng: number }> = {
+    type RegionInfo = {
+      region: WorkerNode['region']
+      country: string
+      city: string
+      lat: number
+      lng: number
+    }
+
+    const regionMap: Record<string, RegionInfo> = {
       'Asia-Seoul': { region: 'asia-pacific', country: 'South Korea', city: 'Seoul', lat: 37.5665, lng: 126.9780 },
       'Asia-Tokyo': { region: 'asia-pacific', country: 'Japan', city: 'Tokyo', lat: 35.6762, lng: 139.6503 },
       'Asia-Singapore': { region: 'asia-pacific', country: 'Singapore', city: 'Singapore', lat: 1.3521, lng: 103.8198 },
@@ -88,13 +96,15 @@ const NodeSelector: React.FC<NodeSelectorProps> = ({
       'Europe-Frankfurt': { region: 'europe', country: 'Germany', city: 'Frankfurt', lat: 50.1109, lng: 8.6821 }
     }
 
-    const locationInfo = regionMap[metadata.region] || {
+    const fallbackLocation: RegionInfo = {
       region: 'asia-pacific',
       country: 'Unknown',
       city: metadata.region,
       lat: 0,
       lng: 0
     }
+
+    const locationInfo = regionMap[metadata.region] ?? fallbackLocation
 
     return {
       id: metadata.provider_address,

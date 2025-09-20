@@ -4,7 +4,6 @@ import React, { useState, useEffect } from 'react'
 import { motion } from 'framer-motion'
 import {
   Wallet,
-  Server,
   Upload,
   Settings,
   Activity,
@@ -19,12 +18,12 @@ import ProjectUpload from '@/components/ProjectUpload'
 import ContractingLoader from '@/components/ContractingLoader'
 import MonitoringDashboard from '@/components/monitoring/MonitoringDashboard'
 import ProviderDashboard from '@/components/provider/ProviderDashboard'
-import StakingPoolStats from '@/components/StakingPoolStats'
+import MinRequirementsSetup from '@/components/MinRequirementsSetup'
 import { WalletInfo, ProjectUploadData, Deployment } from '@/types'
 import { jobRequestService } from '@/services/jobRequestService'
 
 type UserRole = 'user' | 'provider' | null
-type Step = 'wallet' | 'upload' | 'contracting' | 'monitor'
+type Step = 'wallet' | 'requirements' | 'upload' | 'contracting' | 'monitor'
 
 export default function Home() {
   const [selectedRole, setSelectedRole] = useState<UserRole>(null)
@@ -33,12 +32,19 @@ export default function Home() {
   const [deployment, setDeployment] = useState<Deployment | null>(null)
   const [isCheckingJobs, setIsCheckingJobs] = useState(false)
   const [walletInfo, setWalletInfo] = useState<WalletInfo | null>(null)
+  const [minRequirements, setMinRequirements] = useState<{
+    min_cpu_cores: number
+    min_memory_gb: number
+    min_storage_gb: number
+    max_price_per_hour: number
+  } | null>(null)
 
   // Get current wallet account from dapp-kit
   const currentAccount = useCurrentAccount()
 
   const steps = [
     { id: 'wallet', title: '지갑 연결', icon: Wallet, description: 'Sui 지갑을 연결하여 시작하세요' },
+    { id: 'requirements', title: '최소 스펙 설정', icon: Settings, description: '최소 하드웨어 사양을 설정하세요' },
     { id: 'upload', title: '코드 업로드', icon: Upload, description: '프로젝트를 업로드하세요' },
     { id: 'monitor', title: '모니터링', icon: Activity, description: '실시간으로 모니터링하세요' }
   ]
@@ -46,8 +52,8 @@ export default function Home() {
   const isStepCompleted = (stepId: string) => {
     switch (stepId) {
       case 'wallet': return walletInfo !== null
-      case 'upload': return currentStep === 'contracting' || currentStep === 'monitor' || projectData !== null
-      case 'contracting': return currentStep === 'monitor' || deployment !== null
+      case 'requirements': return minRequirements !== null
+      case 'upload': return projectData !== null
       case 'monitor': return deployment !== null
       default: return false
     }
@@ -91,13 +97,13 @@ export default function Home() {
         // 활성 작업이 있는 경우 모니터링 단계로 이동
         setCurrentStep('monitor')
       } else {
-        console.log(`📝 활성 작업 없음, 업로드 단계로 이동`)
-        setCurrentStep('upload')
+        console.log(`📝 활성 작업 없음, 최소 스펙 설정 단계로 이동`)
+        setCurrentStep('requirements')
       }
     } catch (error) {
       console.error('활성 작업 확인 실패:', error)
-      // 오류 발생 시 기본적으로 업로드 단계로 이동
-      setCurrentStep('upload')
+      // 오류 발생 시 기본적으로 최소 스펙 설정 단계로 이동
+      setCurrentStep('requirements')
     } finally {
       setIsCheckingJobs(false)
     }
@@ -108,6 +114,7 @@ export default function Home() {
     setCurrentStep('wallet')
     setProjectData(null)
     setDeployment(null)
+    setMinRequirements(null)
   }
 
   const handleProjectUpload = async (files: File[]) => {
@@ -124,19 +131,12 @@ export default function Home() {
 
   // New function to handle successful upload completion
   const handleUploadComplete = (uploadResult: { success: boolean; message: string; cid_code?: string; blobId?: string }) => {
-    console.log('🎯 handleUploadComplete called with result:', uploadResult)
-
-    if (uploadResult.success) {
-      console.log('✅ Upload successful, moving to contracting step')
-      // 업로드 완료 후 자동으로 계약 체결 단계로 이동
-      setCurrentStep('contracting')
-    } else {
-      console.log('❌ Upload failed:', uploadResult.message)
-    }
+    console.log('Upload completed with result:', uploadResult)
+    // 업로드 완료 후 자동으로 계약 체결 단계로 이동
+    setCurrentStep('contracting')
   }
 
   const handleContractingComplete = () => {
-    console.log('handleContractingComplete called!')
     // 계약 체결 완료 후 자동으로 배포 생성 및 모니터링으로 이동
     const mockDeployment: Deployment = {
       id: 'deploy-1',
@@ -153,9 +153,7 @@ export default function Home() {
       },
       createdAt: new Date()
     }
-    console.log('Setting deployment:', mockDeployment)
     setDeployment(mockDeployment)
-    console.log('Setting current step to monitor')
     setCurrentStep('monitor')
   }
 
@@ -168,6 +166,17 @@ export default function Home() {
     setCurrentStep('wallet')
     setProjectData(null)
     setDeployment(null)
+    setMinRequirements(null)
+  }
+
+  const handleMinRequirementsComplete = (requirements: {
+    min_cpu_cores: number
+    min_memory_gb: number
+    min_storage_gb: number
+    max_price_per_hour: number
+  }) => {
+    setMinRequirements(requirements)
+    setCurrentStep('upload')
   }
 
   // Show role selector if no role is selected
@@ -211,6 +220,14 @@ export default function Home() {
           </div>
         )
 
+      case 'requirements':
+        return (
+          <MinRequirementsSetup
+            onComplete={handleMinRequirementsComplete}
+            onCancel={() => setCurrentStep('wallet')}
+          />
+        )
+
       case 'upload':
         return (
           <ProjectUpload
@@ -224,6 +241,7 @@ export default function Home() {
               '.yaml', '.yml',  // Docker compose files
               '*'  // Accept all files
             ]}
+            minRequirements={minRequirements}
           />
         )
 

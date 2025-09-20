@@ -26,6 +26,7 @@ import { Progress } from '@/components/ui/progress'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { WalletInfo } from '@/types'
 import { nodeRegistryService } from '@/services/nodeRegistry'
+import { jobRequestService } from '@/services/jobRequestService'
 import { NodeMetadata, NODE_STATUS } from '@/contracts/types'
 
 interface ResourceConfig {
@@ -115,7 +116,7 @@ const NodeOperationDashboard: React.FC<NodeOperationDashboardProps> = ({
 
     const unsubscribe = jobRequestService.subscribeToJobEvents(
       walletInfo.address,
-      (eventData) => {
+      (eventData: any) => {
         console.log('🔔 새로운 작업 요청 수신:', eventData)
 
         // 브라우저 알림 표시
@@ -500,7 +501,7 @@ const NodeOperationDashboard: React.FC<NodeOperationDashboardProps> = ({
                     </div>
 
                     <div className="flex gap-3">
-                      {nodeMetadata.status === 'active' ? (
+                      {nodeMetadata.status === NODE_STATUS.ACTIVE ? (
                         <Button variant="outline">
                           <Pause className="w-4 h-4 mr-2" />
                           노드 일시정지

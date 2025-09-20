@@ -13,6 +13,7 @@
     "@mysten/sui": "^1.38.0",
     "@mysten/wallet-standard": "^0.17.0",
     "@mysten/walrus": "^0.7.0",
+    "@radix-ui/react-label": "^2.1.7",
     "@radix-ui/react-progress": "^1.1.7",
     "@radix-ui/react-slot": "^1.2.3",
     "@radix-ui/react-tabs": "^1.1.13",

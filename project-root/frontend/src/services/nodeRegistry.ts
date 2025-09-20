@@ -28,10 +28,10 @@ export class NodeRegistryService {
   }
 
   /**
-   * 새 노드 등록
+   * 새 노드 등록 (시뮬레이션)
    */
   async registerNode(
-    signer: Ed25519Keypair,
+    signer: Ed25519Keypair | null,
     params: {
       cpu_cores: number
       memory_gb: number
@@ -40,41 +40,34 @@ export class NodeRegistryService {
       region: string
     }
   ): Promise<string> {
-    const txb = new Transaction()
-
-    txb.moveCall({
-      target: `${this.packageId}::${CONTRACT_CONFIG.MODULE_NAME}::${MOVE_FUNCTIONS.REGISTER_NODE}`,
-      arguments: [
-        txb.object(this.registryObjectId),
-        txb.pure.u32(params.cpu_cores),
-        txb.pure.u32(params.memory_gb),
-        txb.pure.u32(params.storage_gb),
-        txb.pure.u32(params.bandwidth_mbps),
-        txb.pure.string(params.region),
-      ],
+    console.log('🚀 노드 등록 시뮬레이션:', {
+      cpu: params.cpu_cores,
+      memory: params.memory_gb,
+      storage: params.storage_gb,
+      bandwidth: params.bandwidth_mbps,
+      region: params.region
     })
 
-    const result = await this.suiClient.signAndExecuteTransaction({
-      signer,
-      transaction: txb,
-      options: {
-        showEffects: true,
-        showObjectChanges: true,
-      },
-    })
+    // 실제 컨트랙트가 배포되지 않았으므로 시뮬레이션 모드로 동작
+    try {
+      // 시뮬레이션 딜레이
+      await new Promise(resolve => setTimeout(resolve, 1000))
 
-    if (result.effects?.status?.status !== 'success') {
-      throw new Error(`노드 등록 실패: ${result.effects?.status?.error}`)
+      const mockTxHash = `0x${Math.random().toString(16).substr(2, 64)}`
+      console.log('✅ 노드 등록 시뮬레이션 완료')
+
+      return mockTxHash
+    } catch (error) {
+      console.error('노드 등록 시뮬레이션 실패:', error)
+      throw error
     }
-
-    return result.digest
   }
 
   /**
-   * 노드 정보 업데이트
+   * 노드 정보 업데이트 (시뮬레이션)
    */
   async updateNode(
-    signer: Ed25519Keypair,
+    signer: Ed25519Keypair | null,
     params: {
       cpu_cores: number
       memory_gb: number
@@ -83,122 +76,71 @@ export class NodeRegistryService {
       region: string
     }
   ): Promise<string> {
-    const txb = new Transaction()
+    console.log('🔄 노드 업데이트 시뮬레이션:', params)
 
-    txb.moveCall({
-      target: `${this.packageId}::${CONTRACT_CONFIG.MODULE_NAME}::${MOVE_FUNCTIONS.UPDATE_NODE}`,
-      arguments: [
-        txb.object(this.registryObjectId),
-        txb.pure.u32(params.cpu_cores),
-        txb.pure.u32(params.memory_gb),
-        txb.pure.u32(params.storage_gb),
-        txb.pure.u32(params.bandwidth_mbps),
-        txb.pure.string(params.region),
-      ],
-    })
-
-    const result = await this.suiClient.signAndExecuteTransaction({
-      signer,
-      transaction: txb,
-      options: {
-        showEffects: true,
-      },
-    })
-
-    if (result.effects?.status?.status !== 'success') {
-      throw new Error(`노드 업데이트 실패: ${result.effects?.status?.error}`)
+    try {
+      await new Promise(resolve => setTimeout(resolve, 500))
+      const mockTxHash = `0x${Math.random().toString(16).substr(2, 64)}`
+      console.log('✅ 노드 업데이트 시뮬레이션 완료')
+      return mockTxHash
+    } catch (error) {
+      console.error('노드 업데이트 시뮬레이션 실패:', error)
+      throw error
     }
-
-    return result.digest
   }
 
   /**
-   * 노드 상태 변경
+   * 노드 상태 변경 (시뮬레이션)
    */
   async updateNodeStatus(
-    signer: Ed25519Keypair,
+    signer: Ed25519Keypair | null,
     status: number
   ): Promise<string> {
-    const txb = new Transaction()
+    console.log('🔄 노드 상태 변경 시뮬레이션:', { status })
 
-    txb.moveCall({
-      target: `${this.packageId}::${CONTRACT_CONFIG.MODULE_NAME}::${MOVE_FUNCTIONS.UPDATE_NODE_STATUS}`,
-      arguments: [
-        txb.object(this.registryObjectId),
-        txb.pure.u8(status),
-      ],
-    })
-
-    const result = await this.suiClient.signAndExecuteTransaction({
-      signer,
-      transaction: txb,
-      options: {
-        showEffects: true,
-      },
-    })
-
-    if (result.effects?.status?.status !== 'success') {
-      throw new Error(`노드 상태 변경 실패: ${result.effects?.status?.error}`)
+    try {
+      await new Promise(resolve => setTimeout(resolve, 300))
+      const mockTxHash = `0x${Math.random().toString(16).substr(2, 64)}`
+      console.log('✅ 노드 상태 변경 시뮬레이션 완료')
+      return mockTxHash
+    } catch (error) {
+      console.error('노드 상태 변경 시뮬레이션 실패:', error)
+      throw error
     }
-
-    return result.digest
   }
 
   /**
-   * 노드 삭제
+   * 노드 삭제 (시뮬레이션)
    */
-  async removeNode(signer: Ed25519Keypair): Promise<string> {
-    const txb = new Transaction()
+  async removeNode(signer: Ed25519Keypair | null): Promise<string> {
+    console.log('🗑️ 노드 삭제 시뮬레이션')
 
-    txb.moveCall({
-      target: `${this.packageId}::${CONTRACT_CONFIG.MODULE_NAME}::${MOVE_FUNCTIONS.REMOVE_NODE}`,
-      arguments: [
-        txb.object(this.registryObjectId),
-      ],
-    })
-
-    const result = await this.suiClient.signAndExecuteTransaction({
-      signer,
-      transaction: txb,
-      options: {
-        showEffects: true,
-      },
-    })
-
-    if (result.effects?.status?.status !== 'success') {
-      throw new Error(`노드 삭제 실패: ${result.effects?.status?.error}`)
+    try {
+      await new Promise(resolve => setTimeout(resolve, 500))
+      const mockTxHash = `0x${Math.random().toString(16).substr(2, 64)}`
+      console.log('✅ 노드 삭제 시뮬레이션 완료')
+      return mockTxHash
+    } catch (error) {
+      console.error('노드 삭제 시뮬레이션 실패:', error)
+      throw error
     }
-
-    return result.digest
   }
 
   /**
-   * 특정 주소의 노드 존재 여부 확인
+   * 특정 주소의 노드 존재 여부 확인 (시뮬레이션)
    */
   async nodeExists(providerAddress: string): Promise<boolean> {
     try {
-      const txb = new Transaction()
+      console.log(`🔍 노드 존재 여부 확인 시뮬레이션: ${providerAddress}`)
 
-      txb.moveCall({
-        target: `${this.packageId}::${CONTRACT_CONFIG.MODULE_NAME}::${MOVE_FUNCTIONS.NODE_EXISTS}`,
-        arguments: [
-          txb.object(this.registryObjectId),
-          txb.pure.address(providerAddress),
-        ],
-      })
+      // 시뮬레이션: 항상 false 반환 (새 노드 생성 플로우를 위해)
+      await new Promise(resolve => setTimeout(resolve, 200))
 
-      const response = await this.suiClient.devInspectTransaction({
-        transaction: txb,
-        sender: providerAddress,
-      })
-
-      // 응답 파싱 - 실제 컨트랙트에서는 boolean 값을 받음
-      const returnValue = response.results?.[0]?.returnValues?.[0]
-      const exists = Array.isArray(returnValue) && returnValue.length > 0 && (returnValue[0] as unknown as number) === 1
-      console.log(`✅ 노드 존재 여부 확인: ${providerAddress} -> ${exists}`)
+      const exists = false
+      console.log(`✅ 노드 존재 여부 시뮬레이션 결과: ${providerAddress} -> ${exists}`)
       return exists
     } catch (error) {
-      console.error('노드 존재 여부 확인 실패:', error)
+      console.error('노드 존재 여부 확인 시뮬레이션 실패:', error)
       return false
     }
   }
@@ -218,8 +160,8 @@ export class NodeRegistryService {
         ],
       })
 
-      const response = await this.suiClient.devInspectTransaction({
-        transaction: txb,
+      const response = await this.suiClient.devInspectTransactionBlock({
+        transactionBlock: txb,
         sender: providerAddress,
       })
 
@@ -264,8 +206,8 @@ export class NodeRegistryService {
         ],
       })
 
-      const response = await this.suiClient.devInspectTransaction({
-        transaction: txb,
+      const response = await this.suiClient.devInspectTransactionBlock({
+        transactionBlock: txb,
         sender: '0x0',
       })
 
@@ -291,8 +233,8 @@ export class NodeRegistryService {
         ],
       })
 
-      const response = await this.suiClient.devInspectTransaction({
-        transaction: txb,
+      const response = await this.suiClient.devInspectTransactionBlock({
+        transactionBlock: txb,
         sender: '0x0',
       })
 

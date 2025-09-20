@@ -127,3 +127,31 @@ export interface ProjectUploadData {
   name: string
   description?: string
 }
+
+// Task Pool 관련 타입
+export interface Task {
+  id: string
+  name: string
+  description: string
+  walrusBlobUrl: string
+  requiredResources: {
+    cpu: number
+    memory: number // GB
+    storage: number // GB
+  }
+  reward: number // SUI
+  deadline: Date
+  status: 'available' | 'in_progress' | 'completed' | 'expired'
+  createdBy: string // user address
+  createdAt: Date
+  estimatedDuration: number // hours
+  tags: string[]
+}
+
+export interface TaskFilter {
+  minReward: number
+  maxDuration: number
+  requiredTags: string[]
+  maxCPU: number
+  maxMemory: number
+}

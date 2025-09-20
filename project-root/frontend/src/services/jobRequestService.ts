@@ -115,33 +115,17 @@ export class JobRequestService {
   }
 
   /**
-   * 제공자의 요청 목록 조회
+   * 제공자의 요청 목록 조회 (시뮬레이션)
    */
   async getProviderRequests(providerAddress: string): Promise<JobRequest[]> {
     try {
-      const txb = new Transaction()
+      // 실제 컨트랙트가 배포되지 않았으므로 시뮬레이션 모드로 동작
+      console.log(`✅ 제공자 ${providerAddress}의 요청 목록 조회 (시뮬레이션)`)
 
-      txb.moveCall({
-        target: `${this.packageId}::${JOB_CONTRACT_CONFIG.MODULE_NAME}::${JOB_MOVE_FUNCTIONS.GET_PROVIDER_REQUESTS}`,
-        arguments: [
-          txb.object(this.registryObjectId),
-          txb.pure(providerAddress),
-        ],
-      })
+      // 시뮬레이션용 더미 데이터 반환
+      const mockRequests: JobRequest[] = []
 
-      const response = await this.suiClient.devInspectTransaction({
-        transaction: txb,
-        sender: providerAddress,
-      })
-
-      // 응답 파싱하여 JobRequest 배열로 변환
-      if (response.results?.[0]?.returnValues) {
-        // 실제 구현에서는 여기서 반환된 데이터를 파싱
-        console.log(`✅ 제공자 ${providerAddress}의 요청 목록 조회 완료`)
-        return []
-      }
-
-      return []
+      return mockRequests
     } catch (error) {
       console.error('제공자 요청 목록 조회 실패:', error)
       return []
@@ -173,32 +157,17 @@ export class JobRequestService {
   }
 
   /**
-   * 사용자의 현재 활성 작업 확인
+   * 사용자의 현재 활성 작업 확인 (시뮬레이션)
    */
   async getUserActiveJobs(userAddress: string): Promise<JobRequest[]> {
     try {
-      const txb = new Transaction()
+      // 실제 컨트랙트가 배포되지 않았으므로 시뮬레이션 모드로 동작
+      console.log(`✅ 사용자 ${userAddress}의 활성 작업 조회 (시뮬레이션)`)
 
-      txb.moveCall({
-        target: `${this.packageId}::${JOB_CONTRACT_CONFIG.MODULE_NAME}::${JOB_MOVE_FUNCTIONS.GET_REQUESTER_REQUESTS}`,
-        arguments: [
-          txb.object(this.registryObjectId),
-          txb.pure.address(userAddress),
-        ],
-      })
+      // 시뮬레이션용 더미 데이터 반환
+      const mockActiveJobs: JobRequest[] = []
 
-      const response = await this.suiClient.devInspectTransaction({
-        transaction: txb,
-        sender: userAddress,
-      })
-
-      // 응답 파싱하여 활성 작업만 필터링
-      if (response.results?.[0]?.returnValues) {
-        console.log(`✅ 사용자 ${userAddress}의 활성 작업 조회 완료`)
-        return []
-      }
-
-      return []
+      return mockActiveJobs
     } catch (error) {
       console.error('사용자 활성 작업 조회 실패:', error)
       return []

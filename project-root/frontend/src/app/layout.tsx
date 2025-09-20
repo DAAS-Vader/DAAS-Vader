@@ -15,7 +15,7 @@ const geistMono = Geist_Mono({
 
 export const metadata: Metadata = {
   title: "DaaS - Decentralized as a Service",
-  description: "탈중앙화 서버리스 플랫폼 - Vercel의 편의성과 Web3의 탈중앙화를 결합",
+  description: "Decentralized serverless platform combining the convenience of Vercel with Web3 decentralization.",
 };
 
 export default function RootLayout({
@@ -24,7 +24,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="ko">
+    <html lang="en">
       <body
         className={`${geistSans.variable} ${geistMono.variable} antialiased`}
       >
@@ -35,3 +35,4 @@ export default function RootLayout({
     </html>
   );
 }
+

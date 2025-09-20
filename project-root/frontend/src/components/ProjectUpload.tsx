@@ -55,13 +55,20 @@ interface ProjectUploadProps {
   maxFileSize?: number
   acceptedFileTypes?: string[]
   walletInfo?: WalletInfo | null
+  minRequirements?: {
+    min_cpu_cores: number
+    min_memory_gb: number
+    min_storage_gb: number
+    max_price_per_hour: number
+  } | null
 }
 
 const ProjectUpload: React.FC<ProjectUploadProps> = ({
   onUploadComplete,
   maxFileSize = 500 * 1024 * 1024, // 500MB for docker images
   acceptedFileTypes = ['.zip', '.tar.gz', '.tgz', '.tar', '.docker', '.dockerimage'],
-  walletInfo
+  walletInfo,
+  minRequirements
 }) => {
   // Wallet hooks
   const currentAccount = useCurrentAccount()
@@ -366,14 +373,28 @@ const ProjectUpload: React.FC<ProjectUploadProps> = ({
                 tx.pure.string(imageNam || files[0].name),
                 tx.pure.u64(files.reduce((sum, f) => sum + f.size, 0)),
                 tx.pure.string(activeTab === 'docker' ? 'docker' : 'project'),
-                // MinRequirements parameters
-                tx.pure.u32(activeTab === 'docker' ? 2 : 1),     // min_cpu_cores
-                tx.pure.u32(activeTab === 'docker' ? 4 : 2),     // min_memory_gb
-                tx.pure.u32(activeTab === 'docker' ? 20 : 10),   // min_storage_gb
-                tx.pure.u64(activeTab === 'docker' ? 1000000 : 500000), // max_price_per_hour
+                tx.pure.u32(minRequirements?.min_cpu_cores ?? 1),
+                tx.pure.u32(minRequirements?.min_memory_gb ?? 1),
+                tx.pure.u32(minRequirements?.min_storage_gb ?? 10),
+                tx.pure.u64(minRequirements?.max_price_per_hour ?? 100),
                 tx.object(clockId),
               ],
             })
+
+            // 지갑 연결 및 권한 재확인
+            if (!currentAccount) {
+              throw new Error('지갑이 연결되지 않았습니다. 지갑을 다시 연결해주세요.')
+            }
+
+            // 패키지 ID 유효성 검사
+            if (!PACKAGE_ID || !REGISTRY_ID) {
+              throw new Error('Docker Registry 컨트랙트가 배포되지 않았습니다. 시뮬레이션 모드로 전환하거나 관리자에게 문의하세요.')
+            }
+
+            console.log('🔐 트랜잭션 서명 시작')
+            console.log('📦 패키지 ID:', PACKAGE_ID)
+            console.log('🗄️ 레지스트리 ID:', REGISTRY_ID)
+            console.log('👤 계정:', currentAccount.address)
 
             // 트랜잭션 서명 및 실행
             signAndExecuteTransaction(
@@ -408,9 +429,23 @@ const ProjectUpload: React.FC<ProjectUploadProps> = ({
                 },
                 onError: (error) => {
                   console.error('❌ 온체인 등록 실패:', error)
+
+                  let errorMessage = '온체인 등록 실패'
+
+                  // 권한 관련 오류 처리
+                  if (error.message?.includes('NoPermissionError') || error.message?.includes('-4003')) {
+                    errorMessage = '지갑 권한이 거부되었습니다. 지갑에서 트랜잭션을 승인해주세요.'
+                  } else if (error.message?.includes('Insufficient gas')) {
+                    errorMessage = 'SUI 잔액이 부족합니다. 가스비를 위한 SUI가 필요합니다.'
+                  } else if (error.message?.includes('Package object does not exist')) {
+                    errorMessage = '컨트랙트가 배포되지 않았습니다. 관리자에게 문의하세요.'
+                  } else {
+                    errorMessage = `온체인 등록 실패: ${error.message}`
+                  }
+
                   setUploadProgress({
                     stage: 'error',
-                    message: `온체인 등록 실패: ${error.message}`,
+                    message: errorMessage,
                     percentage: 0
                   })
                 }

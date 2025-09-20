@@ -1,7 +1,7 @@
 import { Transaction } from '@mysten/sui/transactions';
 import { SuiClient } from '@mysten/sui/client';
 
-// 배포된 패키지 ID와 레지스트리 객체 ID 
+// 배포된 패키지 ID와 레지스트리 객체 ID
 export const PACKAGE_ID = '0x2766574215914a60a80eacb51ce46675dbd99e58fc6337faa39631c138f5fc4b';
 export const REGISTRY_ID = '0xb2544ada4dd961e452d0fef18e4a333d59370f3ff7f5014a4ea27fb27ebf89f3'; // DockerRegistry shared object
 
@@ -12,8 +12,8 @@ export interface DockerImage {
   uploadType: 'docker' | 'project';
 }
 
-// Sui SDK Signer 타입 정의
-interface Signer {
+// DockerRegistryClient에서 사용할 Signer 인터페이스
+interface SimpleSigner {
   signAndExecuteTransaction(input: {
     transaction: Transaction;
   }): Promise<{ digest: string }>;
@@ -33,7 +33,11 @@ export class DockerRegistryClient {
     urls: string[],
     imageName: string,
     size: number,
-    signer: Signer
+    minCpuCores: number,
+    minMemoryGb: number,
+    minStorageGb: number,
+    maxPricePerHour: number,
+    signer: SimpleSigner
   ): Promise<string> {
     const tx = new Transaction();
 
@@ -49,18 +53,17 @@ export class DockerRegistryClient {
         tx.pure.string(imageName),
         tx.pure.u64(size),
         tx.pure.string('docker'),
-        tx.pure.u32(2),     // min_cpu_cores (기본값: 2 cores)
-        tx.pure.u32(4),     // min_memory_gb (기본값: 4 GB)
-        tx.pure.u32(20),    // min_storage_gb (기본값: 20 GB)
-        tx.pure.u64(1000000), // max_price_per_hour (기본값: 0.001 SUI/hour)
+        tx.pure.u32(minCpuCores),
+        tx.pure.u32(minMemoryGb),
+        tx.pure.u32(minStorageGb),
+        tx.pure.u64(maxPricePerHour),
         tx.object(clockId),
       ],
     });
 
     // 트랜잭션 실행
-    const result = await this.client.signAndExecuteTransaction({
+    const result = await signer.signAndExecuteTransaction({
       transaction: tx,
-      signer,
     });
 
     return result.digest;
@@ -73,7 +76,11 @@ export class DockerRegistryClient {
     urls: string[],
     projectName: string,
     size: number,
-    signer: Signer
+    minCpuCores: number,
+    minMemoryGb: number,
+    minStorageGb: number,
+    maxPricePerHour: number,
+    signer: SimpleSigner
   ): Promise<string> {
     const tx = new Transaction();
 
@@ -89,18 +96,17 @@ export class DockerRegistryClient {
         tx.pure.string(projectName),
         tx.pure.u64(size),
         tx.pure.string('project'),
-        tx.pure.u32(1),     // min_cpu_cores (프로젝트는 더 낮은 요구사양)
-        tx.pure.u32(2),     // min_memory_gb
-        tx.pure.u32(10),    // min_storage_gb
-        tx.pure.u64(500000), // max_price_per_hour (0.0005 SUI/hour)
+        tx.pure.u32(minCpuCores),
+        tx.pure.u32(minMemoryGb),
+        tx.pure.u32(minStorageGb),
+        tx.pure.u64(maxPricePerHour),
         tx.object(clockId),
       ],
     });
 
     // 트랜잭션 실행
-    const result = await this.client.signAndExecuteTransaction({
+    const result = await signer.signAndExecuteTransaction({
       transaction: tx,
-      signer,
     });
 
     return result.digest;

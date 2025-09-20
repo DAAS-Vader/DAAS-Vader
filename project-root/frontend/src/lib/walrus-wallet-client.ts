@@ -1,5 +1,5 @@
 // Walrus client with proper wallet integration for transaction signing
-import { getFullnodeUrl, SuiClient } from '@mysten/sui/client';
+import { getFullnodeUrl } from '@mysten/sui/client';
 import { Transaction } from '@mysten/sui/transactions';
 import { ConnectButton, useCurrentAccount, useSignAndExecuteTransaction } from '@mysten/dapp-kit';
 
@@ -29,15 +29,10 @@ export const createWalletIntegratedClient = async (): Promise<WalrusWalletClient
     // Dynamic import to avoid SSR issues
     const { WalrusClient } = await import('@mysten/walrus');
 
-    // Create Sui client for testnet
-    const suiClient = new SuiClient({
-      url: getFullnodeUrl('testnet'),
-    });
-
     // Create Walrus client
     const walrusClient = new WalrusClient({
       network: 'testnet',
-      suiClient,
+      suiRpcUrl: getFullnodeUrl('testnet'),
     });
 
     return {
