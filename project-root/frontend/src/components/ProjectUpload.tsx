@@ -701,12 +701,7 @@ const ProjectUpload: React.FC<ProjectUploadProps> = ({
             프로젝트 파일 또는 Docker 이미지를 블록체인에 안전하게 저장하세요
           </p>
           <div className="mt-4 flex items-center justify-center gap-2">
-            <Badge variant="secondary" className="bg-primary/10 text-primary border-primary/20">
-              지갑 주소: {walletInfo?.address ?
-                `${walletInfo.address.slice(0, 6)}...${walletInfo.address.slice(-4)}` :
-                '연결되지 않음'
-              }
-            </Badge>
+            
             {walletInfo?.balance && (
               <Badge variant="outline">잔액: {walletInfo.balance} SUI</Badge>
             )}
