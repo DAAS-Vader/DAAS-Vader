@@ -14,15 +14,19 @@ import {
 import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
+import RoleSelector from '@/components/RoleSelector'
 import WalletConnector from '@/components/wallet/WalletConnector'
 import NodeSelector from '@/components/nodes/NodeSelector'
 import ProjectUpload from '@/components/ProjectUpload'
 import MonitoringDashboard from '@/components/monitoring/MonitoringDashboard'
+import ProviderDashboard from '@/components/provider/ProviderDashboard'
 import { WalletInfo, WorkerNode, ProjectUploadData, Deployment } from '@/types'
 
+type UserRole = 'user' | 'provider' | null
 type Step = 'wallet' | 'nodes' | 'upload' | 'deploy' | 'monitor'
 
 export default function Home() {
+  const [selectedRole, setSelectedRole] = useState<UserRole>(null)
   const [currentStep, setCurrentStep] = useState<Step>('wallet')
   const [walletInfo, setWalletInfo] = useState<WalletInfo | null>(null)
   const [selectedNodes, setSelectedNodes] = useState<WorkerNode[]>([])
@@ -106,6 +110,29 @@ export default function Home() {
     }
     setDeployment(mockDeployment)
     setCurrentStep('monitor')
+  }
+
+  const handleRoleSelect = (role: 'user' | 'provider') => {
+    setSelectedRole(role)
+  }
+
+  const handleRoleChange = () => {
+    setSelectedRole(null)
+    setCurrentStep('wallet')
+    setWalletInfo(null)
+    setSelectedNodes([])
+    setProjectData(null)
+    setDeployment(null)
+  }
+
+  // Show role selector if no role is selected
+  if (!selectedRole) {
+    return <RoleSelector onRoleSelect={handleRoleSelect} />
+  }
+
+  // Show provider dashboard if provider role is selected
+  if (selectedRole === 'provider') {
+    return <ProviderDashboard onRoleChange={handleRoleChange} />
   }
 
   const renderStepContent = () => {
@@ -238,13 +265,25 @@ export default function Home() {
                 <span className="text-primary-foreground font-bold">D</span>
               </div>
               <h1 className="text-xl font-bold">DaaS Platform</h1>
+              <Badge variant="outline" className="ml-2">
+                {selectedRole === 'user' ? '서비스 사용자' : '노드 제공자'}
+              </Badge>
             </div>
 
-            {walletInfo?.connected && (
-              <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2">
+              {walletInfo?.connected && (
                 <Badge variant="secondary">
                   {walletInfo.balance.toFixed(2)} SUI
                 </Badge>
+              )}
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={handleRoleChange}
+              >
+                역할 변경
+              </Button>
+              {walletInfo?.connected && (
                 <Button
                   variant="ghost"
                   size="sm"
@@ -252,8 +291,8 @@ export default function Home() {
                 >
                   연결 해제
                 </Button>
-              </div>
-            )}
+              )}
+            </div>
           </div>
         </div>
       </header>

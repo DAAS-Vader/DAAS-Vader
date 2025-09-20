@@ -1,6 +1,6 @@
 "use client"
 
-import React, { useState, useMemo } from 'react'
+import React, { useState, useMemo, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
   Server,
@@ -13,7 +13,8 @@ import {
   Clock,
   Filter,
   Globe,
-  Check
+  Check,
+  Loader2
 } from 'lucide-react'
 import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -22,6 +23,8 @@ import { Badge } from '@/components/ui/badge'
 import { Progress } from '@/components/ui/progress'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { WorkerNode, NodeFilter } from '@/types'
+import { mockNodeRegistryService } from '@/services/mockNodeService'
+import { NodeMetadata, NODE_STATUS } from '@/contracts/types'
 
 interface NodeSelectorProps {
   onSelect: (nodes: WorkerNode[]) => void
@@ -46,73 +49,81 @@ const NodeSelector: React.FC<NodeSelectorProps> = ({
   const [selectedNodeIds, setSelectedNodeIds] = useState<Set<string>>(
     new Set(selectedNodes.map(n => n.id))
   )
+  const [availableNodes, setAvailableNodes] = useState<WorkerNode[]>([])
+  const [isLoading, setIsLoading] = useState(true)
 
-  // Mock 데이터 (실제로는 API에서 가져올 예정)
-  const mockNodes: WorkerNode[] = [
-    {
-      id: 'seoul-01',
-      name: 'Seoul-01',
-      region: 'asia-pacific',
-      country: 'South Korea',
-      city: 'Seoul',
-      specs: { cpu: 4, memory: 8, storage: 100 },
-      performance: { uptime: 99.8, avgLatency: 12, reputation: 95 },
-      pricing: { cpuPrice: 0.025, memoryPrice: 0.01, basePrice: 0.05 },
-      status: 'available',
-      location: { lat: 37.5665, lng: 126.9780 }
-    },
-    {
-      id: 'tokyo-05',
-      name: 'Tokyo-05',
-      region: 'asia-pacific',
-      country: 'Japan',
-      city: 'Tokyo',
-      specs: { cpu: 8, memory: 16, storage: 200 },
-      performance: { uptime: 99.9, avgLatency: 28, reputation: 98 },
-      pricing: { cpuPrice: 0.03, memoryPrice: 0.015, basePrice: 0.08 },
-      status: 'available',
-      location: { lat: 35.6762, lng: 139.6503 }
-    },
-    {
-      id: 'nyc-12',
-      name: 'NYC-12',
-      region: 'north-america',
-      country: 'United States',
-      city: 'New York',
-      specs: { cpu: 2, memory: 4, storage: 50 },
-      performance: { uptime: 98.5, avgLatency: 145, reputation: 88 },
-      pricing: { cpuPrice: 0.02, memoryPrice: 0.008, basePrice: 0.04 },
-      status: 'available',
-      location: { lat: 40.7128, lng: -74.0060 }
-    },
-    {
-      id: 'london-08',
-      name: 'London-08',
-      region: 'europe',
-      country: 'United Kingdom',
-      city: 'London',
-      specs: { cpu: 6, memory: 12, storage: 150 },
-      performance: { uptime: 99.5, avgLatency: 89, reputation: 92 },
-      pricing: { cpuPrice: 0.028, memoryPrice: 0.012, basePrice: 0.06 },
-      status: 'busy',
-      location: { lat: 51.5074, lng: -0.1278 }
-    },
-    {
-      id: 'singapore-03',
-      name: 'Singapore-03',
-      region: 'asia-pacific',
-      country: 'Singapore',
-      city: 'Singapore',
-      specs: { cpu: 12, memory: 24, storage: 300 },
-      performance: { uptime: 99.7, avgLatency: 35, reputation: 96 },
-      pricing: { cpuPrice: 0.035, memoryPrice: 0.018, basePrice: 0.1 },
-      status: 'available',
-      location: { lat: 1.3521, lng: 103.8198 }
+  // 컨트랙트에서 노드 데이터 로드
+  useEffect(() => {
+    const loadNodes = async () => {
+      try {
+        setIsLoading(true)
+        const nodeMetadataList = await mockNodeRegistryService.getAllNodes()
+
+        // NodeMetadata를 WorkerNode 형식으로 변환
+        const workerNodes: WorkerNode[] = nodeMetadataList
+          .filter(node => node.status === NODE_STATUS.ACTIVE)
+          .map(convertNodeMetadataToWorkerNode)
+
+        setAvailableNodes(workerNodes)
+      } catch (error) {
+        console.error('노드 정보 로드 실패:', error)
+        setAvailableNodes([])
+      } finally {
+        setIsLoading(false)
+      }
     }
-  ]
+
+    loadNodes()
+  }, [])
+
+  // NodeMetadata를 WorkerNode로 변환하는 함수
+  const convertNodeMetadataToWorkerNode = (metadata: NodeMetadata): WorkerNode => {
+    const regionMap: Record<string, { region: string, country: string, city: string, lat: number, lng: number }> = {
+      'Asia-Seoul': { region: 'asia-pacific', country: 'South Korea', city: 'Seoul', lat: 37.5665, lng: 126.9780 },
+      'Asia-Tokyo': { region: 'asia-pacific', country: 'Japan', city: 'Tokyo', lat: 35.6762, lng: 139.6503 },
+      'Asia-Singapore': { region: 'asia-pacific', country: 'Singapore', city: 'Singapore', lat: 1.3521, lng: 103.8198 },
+      'US-East': { region: 'north-america', country: 'United States', city: 'New York', lat: 40.7128, lng: -74.0060 },
+      'US-West': { region: 'north-america', country: 'United States', city: 'San Francisco', lat: 37.7749, lng: -122.4194 },
+      'Europe-London': { region: 'europe', country: 'United Kingdom', city: 'London', lat: 51.5074, lng: -0.1278 },
+      'Europe-Frankfurt': { region: 'europe', country: 'Germany', city: 'Frankfurt', lat: 50.1109, lng: 8.6821 }
+    }
+
+    const locationInfo = regionMap[metadata.region] || {
+      region: 'asia-pacific',
+      country: 'Unknown',
+      city: metadata.region,
+      lat: 0,
+      lng: 0
+    }
+
+    return {
+      id: metadata.provider_address,
+      name: `Node-${metadata.provider_address.slice(-6)}`,
+      region: locationInfo.region,
+      country: locationInfo.country,
+      city: locationInfo.city,
+      specs: {
+        cpu: metadata.cpu_cores,
+        memory: metadata.memory_gb,
+        storage: metadata.storage_gb
+      },
+      performance: {
+        uptime: 95 + Math.random() * 5, // 더미 데이터
+        avgLatency: Math.floor(Math.random() * 100) + 10, // 더미 데이터
+        reputation: 85 + Math.floor(Math.random() * 15) // 더미 데이터
+      },
+      pricing: {
+        cpuPrice: 0.02 + Math.random() * 0.02,
+        memoryPrice: 0.01 + Math.random() * 0.01,
+        basePrice: 0.03 + Math.random() * 0.05
+      },
+      status: 'available',
+      location: { lat: locationInfo.lat, lng: locationInfo.lng }
+    }
+  }
 
   const filteredNodes = useMemo(() => {
-    return mockNodes.filter(node => {
+    return availableNodes.filter(node => {
       const regionMatch = filters.regions.length === 0 || filters.regions.includes(node.region)
       const cpuMatch = node.specs.cpu >= filters.minCPU
       const latencyMatch = node.performance.avgLatency <= filters.maxLatency
@@ -122,7 +133,7 @@ const NodeSelector: React.FC<NodeSelectorProps> = ({
 
       return regionMatch && cpuMatch && latencyMatch && priceMatch && reputationMatch
     })
-  }, [mockNodes, filters])
+  }, [availableNodes, filters])
 
   const handleNodeToggle = (node: WorkerNode) => {
     const newSelected = new Set(selectedNodeIds)
@@ -264,9 +275,24 @@ const NodeSelector: React.FC<NodeSelectorProps> = ({
       {/* Node List/Map */}
       <Tabs value={viewMode} onValueChange={(value) => setViewMode(value as 'list' | 'map')}>
         <TabsContent value="list" className="space-y-4">
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            <AnimatePresence>
-              {filteredNodes.map(node => {
+          {isLoading ? (
+            <div className="flex flex-col items-center justify-center py-12">
+              <Loader2 className="w-8 h-8 animate-spin text-primary mb-4" />
+              <p className="text-muted-foreground">사용 가능한 노드를 검색하는 중...</p>
+            </div>
+          ) : filteredNodes.length === 0 ? (
+            <div className="text-center py-12">
+              <Server className="w-16 h-16 mx-auto text-muted-foreground mb-4" />
+              <h3 className="text-xl font-semibold mb-2">사용 가능한 노드가 없습니다</h3>
+              <p className="text-muted-foreground">
+                현재 설정된 필터 조건에 맞는 노드가 없습니다.<br />
+                필터를 조정하거나 잠시 후 다시 시도해주세요.
+              </p>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              <AnimatePresence>
+                {filteredNodes.map(node => {
                 const isSelected = selectedNodeIds.has(node.id)
                 const hourlyPrice = node.pricing.basePrice + (node.specs.cpu * node.pricing.cpuPrice)
 
@@ -346,10 +372,11 @@ const NodeSelector: React.FC<NodeSelectorProps> = ({
                       </div>
                     </Card>
                   </motion.div>
-                )
-              })}
-            </AnimatePresence>
-          </div>
+                  )
+                })}
+              </AnimatePresence>
+            </div>
+          )}
         </TabsContent>
 
         <TabsContent value="map">
@@ -363,15 +390,15 @@ const NodeSelector: React.FC<NodeSelectorProps> = ({
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-6">
                 <div className="text-center">
                   <div className="w-4 h-4 bg-blue-500 rounded-full mx-auto mb-2" />
-                  <span className="text-sm">아시아-태평양 ({mockNodes.filter(n => n.region === 'asia-pacific').length})</span>
+                  <span className="text-sm">아시아-태평양 ({availableNodes.filter(n => n.region === 'asia-pacific').length})</span>
                 </div>
                 <div className="text-center">
                   <div className="w-4 h-4 bg-green-500 rounded-full mx-auto mb-2" />
-                  <span className="text-sm">북미 ({mockNodes.filter(n => n.region === 'north-america').length})</span>
+                  <span className="text-sm">북미 ({availableNodes.filter(n => n.region === 'north-america').length})</span>
                 </div>
                 <div className="text-center">
                   <div className="w-4 h-4 bg-purple-500 rounded-full mx-auto mb-2" />
-                  <span className="text-sm">유럽 ({mockNodes.filter(n => n.region === 'europe').length})</span>
+                  <span className="text-sm">유럽 ({availableNodes.filter(n => n.region === 'europe').length})</span>
                 </div>
               </div>
             </div>
