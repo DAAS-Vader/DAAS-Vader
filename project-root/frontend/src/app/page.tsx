@@ -19,6 +19,7 @@ import ProjectUpload from '@/components/ProjectUpload'
 import ContractingLoader from '@/components/ContractingLoader'
 import MonitoringDashboard from '@/components/monitoring/MonitoringDashboard'
 import ProviderDashboard from '@/components/provider/ProviderDashboard'
+import StakingPoolStats from '@/components/StakingPoolStats'
 import { WalletInfo, ProjectUploadData, Deployment } from '@/types'
 import { jobRequestService } from '@/services/jobRequestService'
 
@@ -205,6 +206,8 @@ export default function Home() {
                 <p className="text-muted-foreground text-sm">활성 작업 확인 중...</p>
               </div>
             )}
+            {/* Staking Pool Statistics */}
+            <StakingPoolStats />
           </div>
         )
 
