@@ -11,6 +11,7 @@ import TaskSelector from '@/components/tasks/TaskSelector'
 import NodeSetup from './NodeSetup'
 import { WalletInfo, Task } from '@/types'
 import { nodeRegistryService } from '@/services/nodeRegistry'
+import StakingPoolStats from '../StakingPoolStats'
 
 type Step = 'wallet' | 'node' | 'tasks' | 'deploy'
 type ViewState = 'wallet' | 'node' | 'node-setup' | 'tasks' | 'deploy'
@@ -218,6 +219,7 @@ const ProviderDashboard: React.FC<ProviderDashboardProps> = ({ onRoleChange }) =
       case 'tasks':
         return (
           <div className="space-y-6">
+            <StakingPoolStats/>
             <TaskSelector
               onSelect={handleTasksSelect}
               selectedTask={selectedTask}

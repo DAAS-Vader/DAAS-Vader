@@ -215,8 +215,6 @@ export default function Home() {
                 <p className="text-muted-foreground text-sm">활성 작업 확인 중...</p>
               </div>
             )}
-            {/* Staking Pool Statistics */}
-            <StakingPoolStats />
           </div>
         )
 
