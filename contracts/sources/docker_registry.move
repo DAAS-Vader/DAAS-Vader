@@ -13,6 +13,14 @@ public struct DockerRegistry has key {
     total_images: u64,
 }
 
+/// 최소 요구 사양
+public struct MinRequirements has copy, drop, store {
+    min_cpu_cores: u32,
+    min_memory_gb: u32,
+    min_storage_gb: u32,
+    max_price_per_hour: u64, // SUI per hour (사용자가 지불할 최대 가격)
+}
+
 /// Docker 이미지 정보
 public struct DockerImage has copy, drop, store {
     download_urls: vector<String>, // URL pool (여러 다운로드 소스)
@@ -21,6 +29,7 @@ public struct DockerImage has copy, drop, store {
     size: u64,
     timestamp: u64,
     upload_type: String, // "docker" or "project"
+    requirements: MinRequirements, // 최소 요구 사양
 }
 
 /// 이미지 등록 이벤트
@@ -49,13 +58,17 @@ fun init(ctx: &mut TxContext) {
     transfer::share_object(registry);
 }
 
-/// Docker 이미지 등록 (여러 URL 지원)
+/// Docker 이미지 등록 (여러 URL 지원 + 최소 요구 사양)
 public fun register_docker_image(
     registry: &mut DockerRegistry,
     download_urls: vector<String>,
     image_name: String,
     size: u64,
     upload_type: String,
+    min_cpu_cores: u32,
+    min_memory_gb: u32,
+    min_storage_gb: u32,
+    max_price_per_hour: u64,
     clock: &Clock,
     ctx: &mut TxContext,
 ) {
@@ -73,6 +86,19 @@ public fun register_docker_image(
         i = i + 1;
     };
 
+    // 최소 요구 사양 유효성 검사
+    assert!(min_cpu_cores > 0, 3);
+    assert!(min_memory_gb > 0, 4);
+    assert!(min_storage_gb > 0, 5);
+    assert!(max_price_per_hour > 0, 6);
+
+    let requirements = MinRequirements {
+        min_cpu_cores,
+        min_memory_gb,
+        min_storage_gb,
+        max_price_per_hour,
+    };
+
     let docker_image = DockerImage {
         download_urls,
         primary_url_index: 0, // 첫 번째 URL을 기본으로 설정
@@ -80,6 +106,7 @@ public fun register_docker_image(
         size,
         timestamp,
         upload_type,
+        requirements,
     };
 
     // 사용자별 이미지 목록에 추가

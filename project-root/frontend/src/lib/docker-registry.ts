@@ -1,9 +1,9 @@
 import { Transaction } from '@mysten/sui/transactions';
 import { SuiClient } from '@mysten/sui/client';
 
-// 배포된 패키지 ID와 레지스트리 객체 ID
-export const PACKAGE_ID = '0xf59bd1a3d4a0d26fa84d9d1c6cceb69063347f7ff2ee3a381115af6057cb30d2';
-export const REGISTRY_ID = '0xa49447a573835ee7a3036565735ab4d1404460b35aa95af6296f64bdf994eb21'; // DockerRegistry shared object
+// 배포된 패키지 ID와 레지스트리 객체 ID 
+export const PACKAGE_ID = '0x2766574215914a60a80eacb51ce46675dbd99e58fc6337faa39631c138f5fc4b';
+export const REGISTRY_ID = '0xb2544ada4dd961e452d0fef18e4a333d59370f3ff7f5014a4ea27fb27ebf89f3'; // DockerRegistry shared object
 
 export interface DockerImage {
   downloadUrls: string[];
@@ -40,7 +40,7 @@ export class DockerRegistryClient {
     // Clock 객체 참조
     const clockId = '0x6';
 
-    // register_docker_image 함수 호출
+    // register_docker_image 함수 호출 (최소 요구 사양 추가)
     tx.moveCall({
       target: `${PACKAGE_ID}::docker_registry::register_docker_image`,
       arguments: [
@@ -49,6 +49,10 @@ export class DockerRegistryClient {
         tx.pure.string(imageName),
         tx.pure.u64(size),
         tx.pure.string('docker'),
+        tx.pure.u32(2),     // min_cpu_cores (기본값: 2 cores)
+        tx.pure.u32(4),     // min_memory_gb (기본값: 4 GB)
+        tx.pure.u32(20),    // min_storage_gb (기본값: 20 GB)
+        tx.pure.u64(1000000), // max_price_per_hour (기본값: 0.001 SUI/hour)
         tx.object(clockId),
       ],
     });
@@ -76,7 +80,7 @@ export class DockerRegistryClient {
     // Clock 객체 참조
     const clockId = '0x6';
 
-    // register_docker_image 함수 호출 (upload_type을 'project'로)
+    // register_docker_image 함수 호출 (upload_type을 'project'로, 최소 요구 사양 추가)
     tx.moveCall({
       target: `${PACKAGE_ID}::docker_registry::register_docker_image`,
       arguments: [
@@ -85,6 +89,10 @@ export class DockerRegistryClient {
         tx.pure.string(projectName),
         tx.pure.u64(size),
         tx.pure.string('project'),
+        tx.pure.u32(1),     // min_cpu_cores (프로젝트는 더 낮은 요구사양)
+        tx.pure.u32(2),     // min_memory_gb
+        tx.pure.u32(10),    // min_storage_gb
+        tx.pure.u64(500000), // max_price_per_hour (0.0005 SUI/hour)
         tx.object(clockId),
       ],
     });

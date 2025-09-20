@@ -265,6 +265,13 @@ export default function Home() {
               <Button
                 variant="ghost"
                 size="sm"
+                onClick={() => window.location.href = '/staking'}
+              >
+                스테이킹 현황
+              </Button>
+              <Button
+                variant="ghost"
+                size="sm"
                 onClick={handleRoleChange}
               >
                 역할 변경

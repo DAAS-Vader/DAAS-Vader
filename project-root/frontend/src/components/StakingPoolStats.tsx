@@ -2,9 +2,11 @@
 
 import React, { useState, useEffect } from 'react'
 import { motion } from 'framer-motion'
-import { Users, Activity, Coins, TrendingUp, Server, Shield } from 'lucide-react'
+import { Users, Activity, Coins, TrendingUp, Server, Shield, Search, User } from 'lucide-react'
 import { Card } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
 import { workerRegistryService, PoolStats } from '@/services/workerRegistryService'
 
 const StakingPoolStats: React.FC = () => {
@@ -15,6 +17,9 @@ const StakingPoolStats: React.FC = () => {
   })
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [workerNodeId, setWorkerNodeId] = useState('')
+  const [workerStake, setWorkerStake] = useState<number | null>(null)
+  const [searchLoading, setSearchLoading] = useState(false)
 
   useEffect(() => {
     const fetchPoolStats = async () => {
@@ -34,8 +39,8 @@ const StakingPoolStats: React.FC = () => {
     // Initial fetch
     fetchPoolStats()
 
-    // Refresh every 30 seconds
-    const interval = setInterval(fetchPoolStats, 30000)
+    // Refresh every 10 seconds
+    const interval = setInterval(fetchPoolStats, 10000)
 
     return () => clearInterval(interval)
   }, [])
@@ -43,6 +48,26 @@ const StakingPoolStats: React.FC = () => {
   const activeRate = poolStats.totalWorkers > 0
     ? (poolStats.activeWorkers / poolStats.totalWorkers * 100).toFixed(1)
     : '0'
+
+  const handleSearchWorkerStake = async () => {
+    if (!workerNodeId.trim()) {
+      alert('워커 노드 ID를 입력해주세요')
+      return
+    }
+
+    setSearchLoading(true)
+    setWorkerStake(null)
+
+    try {
+      const stake = await workerRegistryService.getWorkerStake(workerNodeId.trim())
+      setWorkerStake(stake)
+    } catch (error) {
+      console.error('Error fetching worker stake:', error)
+      alert('워커 스테이킹 정보를 가져오는데 실패했습니다')
+    } finally {
+      setSearchLoading(false)
+    }
+  }
 
   const statsCards = [
     {
@@ -185,6 +210,65 @@ const StakingPoolStats: React.FC = () => {
               {poolStats.totalWorkers - poolStats.activeWorkers}
             </p>
           </div>
+        </div>
+      </Card>
+
+      {/* Worker Stake Query Section */}
+      <Card className="p-6">
+        <div className="space-y-4">
+          <div className="flex items-center gap-2">
+            <User className="w-5 h-5 text-primary" />
+            <h4 className="text-sm font-medium">개별 워커 스테이킹 조회</h4>
+          </div>
+
+          <div className="flex gap-2">
+            <Input
+              placeholder="워커 노드 ID 입력 (예: worker-001)"
+              value={workerNodeId}
+              onChange={(e) => setWorkerNodeId(e.target.value)}
+              onKeyDown={(e) => e.key === 'Enter' && handleSearchWorkerStake()}
+              className="flex-1"
+            />
+            <Button
+              onClick={handleSearchWorkerStake}
+              disabled={searchLoading}
+              size="sm"
+              className="gap-2"
+            >
+              {searchLoading ? (
+                <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+              ) : (
+                <Search className="w-4 h-4" />
+              )}
+              조회
+            </Button>
+          </div>
+
+          {workerStake !== null && (
+            <motion.div
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="p-4 bg-muted rounded-lg"
+            >
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm text-muted-foreground">워커 ID</p>
+                  <p className="font-mono text-xs mt-1">{workerNodeId}</p>
+                </div>
+                <div className="text-right">
+                  <p className="text-sm text-muted-foreground">스테이킹 금액</p>
+                  <p className="text-lg font-bold text-primary">
+                    {workerRegistryService.formatStake(workerStake)} SUI
+                  </p>
+                </div>
+              </div>
+              {workerStake === 0 && (
+                <p className="text-xs text-yellow-600 mt-2">
+                  ⚠️ 해당 워커가 존재하지 않거나 스테이킹이 없습니다
+                </p>
+              )}
+            </motion.div>
+          )}
         </div>
       </Card>
     </div>

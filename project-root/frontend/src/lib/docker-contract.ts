@@ -46,16 +46,26 @@ export class DockerContractClient {
       imageData
     });
 
+    // Create URLs array from download URL and Walrus blob ID
+    const urls = [imageData.downloadUrl];
+    if (imageData.walrusBlobId) {
+      urls.push(`https://aggregator-devnet.walrus.space/v1/${imageData.walrusBlobId}`);
+      urls.push(`https://publisher-devnet.walrus.space/v1/${imageData.walrusBlobId}`);
+    }
+
     tx.moveCall({
       target: `${DOCKER_REGISTRY_PACKAGE}::docker_registry::register_docker_image`,
       arguments: [
         tx.object(DOCKER_REGISTRY_ID),           // registry
-        tx.pure.string(imageData.walrusBlobId),  // walrus_blob_id
-        tx.pure.string(imageData.downloadUrl),   // download_url
+        tx.pure.vector('string', urls),          // download_urls (vector)
         tx.pure.string(imageData.imageName),     // image_name
-        tx.pure.string(imageData.version),       // version
         tx.pure.u64(imageData.size),            // size
         tx.pure.string(imageData.uploadType),   // upload_type
+        // MinRequirements parameters
+        tx.pure.u32(imageData.uploadType === 'docker' ? 2 : 1),     // min_cpu_cores
+        tx.pure.u32(imageData.uploadType === 'docker' ? 4 : 2),     // min_memory_gb
+        tx.pure.u32(imageData.uploadType === 'docker' ? 20 : 10),   // min_storage_gb
+        tx.pure.u64(imageData.uploadType === 'docker' ? 1000000 : 500000), // max_price_per_hour
         tx.object(CLOCK_ID)                     // clock
       ],
     });

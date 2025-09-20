@@ -357,7 +357,7 @@ const ProjectUpload: React.FC<ProjectUploadProps> = ({
               urls.push(`https://publisher-devnet.walrus.space/v1/${blobId}`)
             }
 
-            // register_docker_image 함수 호출
+            // register_docker_image 함수 호출 (최소 요구 사양 포함)
             tx.moveCall({
               target: `${PACKAGE_ID}::docker_registry::register_docker_image`,
               arguments: [
@@ -366,6 +366,11 @@ const ProjectUpload: React.FC<ProjectUploadProps> = ({
                 tx.pure.string(imageNam || files[0].name),
                 tx.pure.u64(files.reduce((sum, f) => sum + f.size, 0)),
                 tx.pure.string(activeTab === 'docker' ? 'docker' : 'project'),
+                // MinRequirements parameters
+                tx.pure.u32(activeTab === 'docker' ? 2 : 1),     // min_cpu_cores
+                tx.pure.u32(activeTab === 'docker' ? 4 : 2),     // min_memory_gb
+                tx.pure.u32(activeTab === 'docker' ? 20 : 10),   // min_storage_gb
+                tx.pure.u64(activeTab === 'docker' ? 1000000 : 500000), // max_price_per_hour
                 tx.object(clockId),
               ],
             })
