@@ -1,0 +1,68 @@
+global:
+  scrape_interval: 15s      # 기본 메트릭 수집 간격
+  evaluation_interval: 15s   # 규칙 평가 간격
+  scrape_timeout: 10s       # 스크레이프 타임아웃
+
+# Alertmanager 설정 (선택사항)
+alerting:
+  alertmanagers:
+    - static_configs:
+        - targets: []
+
+# Alert 규칙 파일 (선택사항)
+rule_files:
+  # - "alerts.yml"
+
+# 스크레이핑 대상 설정
+scrape_configs:
+  # 1. Prometheus 자체 모니터링
+  - job_name: 'prometheus'
+    static_configs:
+      - targets: ['localhost:9090']
+
+  # 2. DAAS Vader 백엔드 서버
+  - job_name: 'daas-vader-backend'
+    static_configs:
+      - targets: ['localhost:3001']
+    metrics_path: '/metrics'
+
+  # 3. Docker 빌드 노드들 (Node Exporter)
+  - job_name: 'docker-nodes'
+    scrape_interval: 30s    # 이 job만 30초마다 수집 (덜 중요한 경우)
+    scrape_timeout: 15s     # 타임아웃 15초
+    static_configs:
+      # 실제 노드 IP들로 교체 필요
+      - targets:
+        - 'node1.example.com:9100'  # 노드 1
+        - 'node2.example.com:9100'  # 노드 2
+        - 'node3.example.com:9100'  # 노드 3
+        labels:
+          group: 'docker-build-nodes'
+
+  # 4. Docker 컨테이너 메트릭 (cAdvisor) - 더 자주 수집
+  - job_name: 'cadvisor'
+    scrape_interval: 10s    # 컨테이너 메트릭은 더 자주 (10초마다)
+    scrape_timeout: 8s
+    static_configs:
+      - targets:
+        - 'node1.example.com:8080'
+        - 'node2.example.com:8080'
+        - 'node3.example.com:8080'
+        labels:
+          group: 'docker-containers'
+
+  # 5. 중요한 애플리케이션 메트릭 - 고빈도 수집
+  - job_name: 'daas-vader-critical'
+    scrape_interval: 5s     # 중요한 메트릭은 5초마다
+    scrape_timeout: 3s
+    static_configs:
+      - targets: ['localhost:3001']
+    metrics_path: '/metrics'
+    params:
+      collect[]: ['critical']  # 특정 메트릭만 수집
+
+  # 5. 동적 서비스 디스커버리 (선택사항 - Consul, Kubernetes 등)
+  # - job_name: 'dynamic-nodes'
+  #   consul_sd_configs:
+  #     - server: 'localhost:8500'
+  #       services: ['docker-node']
