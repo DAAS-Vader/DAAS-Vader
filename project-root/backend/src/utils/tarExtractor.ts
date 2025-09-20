@@ -1,7 +1,7 @@
 import * as tarStream from 'tar-stream';
 import * as zlib from 'zlib';
 import { Readable } from 'stream';
-import { walrusService } from '../services/walrusService.js';
+import { WalrusSDKService } from '../services/walrusSDKService.js';
 import { ServiceError } from '../types/index.js';
 
 export class TarExtractor {
@@ -13,7 +13,8 @@ export class TarExtractor {
       console.log(`📁 Extracting file "${targetFilePath}" from Walrus CID: ${cid}`);
 
       // Download the tar.gz from Walrus using SDK
-      const bundleData = await walrusService.downloadBundle(cid);
+      const walrusSDKService = new WalrusSDKService();
+      const bundleData = await walrusSDKService.downloadBundle(cid);
 
       return new Promise((resolve, reject) => {
         const extract = tarStream.extract();
@@ -85,7 +86,8 @@ export class TarExtractor {
       console.log(`📋 Listing files from Walrus CID: ${cid}`);
 
       // Download the tar.gz from Walrus using SDK
-      const bundleData = await walrusService.downloadBundle(cid);
+      const walrusSDKService = new WalrusSDKService();
+      const bundleData = await walrusSDKService.downloadBundle(cid);
 
       return new Promise((resolve, reject) => {
         const extract = tarStream.extract();
@@ -144,7 +146,8 @@ export class TarExtractor {
       console.log(`📊 Getting metadata for "${targetFilePath}" from Walrus CID: ${cid}`);
 
       // Download the tar.gz from Walrus using SDK
-      const bundleData = await walrusService.downloadBundle(cid);
+      const walrusSDKService = new WalrusSDKService();
+      const bundleData = await walrusSDKService.downloadBundle(cid);
 
       return new Promise((resolve, reject) => {
         const extract = tarStream.extract();

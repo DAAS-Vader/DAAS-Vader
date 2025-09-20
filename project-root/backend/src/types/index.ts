@@ -98,6 +98,17 @@ export interface Config {
     serviceToken: string;
     ticketSecret: string;
   };
+  sealV2?: {
+    packageId?: string;
+    sealRegistryId?: string;
+    enclaveRegistryId?: string;
+    adminPrivateKey?: string;
+    defaultIdentity?: string;
+  };
+  sui?: {
+    rpcUrl?: string;
+    networkType?: string;
+  };
   walrus: {
     // SDK configuration
     useSDK?: boolean;
