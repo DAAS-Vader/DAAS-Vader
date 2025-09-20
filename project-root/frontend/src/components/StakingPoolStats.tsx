@@ -51,7 +51,7 @@ const StakingPoolStats: React.FC = () => {
 
   const handleSearchWorkerStake = async () => {
     if (!workerNodeId.trim()) {
-      alert('워커 노드 ID를 입력해주세요')
+      alert('Please enter a worker node ID')
       return
     }
 
@@ -63,7 +63,7 @@ const StakingPoolStats: React.FC = () => {
       setWorkerStake(stake)
     } catch (error) {
       console.error('Error fetching worker stake:', error)
-      alert('워커 스테이킹 정보를 가져오는데 실패했습니다')
+      alert('Failed to fetch worker staking information')
     } finally {
       setSearchLoading(false)
     }
@@ -71,28 +71,28 @@ const StakingPoolStats: React.FC = () => {
 
   const statsCards = [
     {
-      title: '전체 워커',
+      title: 'Total Workers',
       value: poolStats.totalWorkers,
       icon: Users,
       color: 'text-blue-500',
       bgColor: 'bg-blue-50',
-      description: '등록된 전체 워커 노드'
+      description: 'Total registered worker nodes'
     },
     {
-      title: '활성 워커',
+      title: 'Active Workers',
       value: poolStats.activeWorkers,
       icon: Activity,
       color: 'text-green-500',
       bgColor: 'bg-green-50',
-      description: `활성률: ${activeRate}%`
+      description: `Activity rate: ${activeRate}%`
     },
     {
-      title: '총 스테이킹',
+      title: 'Total Staking',
       value: `${workerRegistryService.formatStake(poolStats.totalStake)} SUI`,
       icon: Coins,
       color: 'text-purple-500',
       bgColor: 'bg-purple-50',
-      description: '전체 스테이킹 금액'
+      description: 'Total staking amount'
     }
   ]
 
@@ -125,8 +125,8 @@ const StakingPoolStats: React.FC = () => {
             <Server className="w-5 h-5 text-primary" />
           </div>
           <div>
-            <h3 className="text-lg font-semibold">워커 스테이킹 풀</h3>
-            <p className="text-sm text-muted-foreground">Worker Registry 실시간 통계</p>
+            <h3 className="text-lg font-semibold">Worker Staking Pool</h3>
+            <p className="text-sm text-muted-foreground">Worker Registry Real-time Statistics</p>
           </div>
         </div>
         <Badge variant="outline" className="gap-1">
@@ -167,9 +167,9 @@ const StakingPoolStats: React.FC = () => {
       <Card className="p-6">
         <div className="flex items-center justify-between">
           <div className="space-y-1">
-            <h4 className="text-sm font-medium">네트워크 활동</h4>
+            <h4 className="text-sm font-medium">Network Activity</h4>
             <p className="text-xs text-muted-foreground">
-              {poolStats.activeWorkers} / {poolStats.totalWorkers} 워커 활성
+              {poolStats.activeWorkers} / {poolStats.totalWorkers} workers active
             </p>
           </div>
           <div className="flex items-center gap-2">
@@ -193,7 +193,7 @@ const StakingPoolStats: React.FC = () => {
         {/* Mini Stats */}
         <div className="grid grid-cols-3 gap-4 mt-4 pt-4 border-t">
           <div className="text-center">
-            <p className="text-xs text-muted-foreground">평균 스테이킹</p>
+            <p className="text-xs text-muted-foreground">Average Staking</p>
             <p className="text-sm font-semibold">
               {poolStats.totalWorkers > 0
                 ? workerRegistryService.formatStake(poolStats.totalStake / poolStats.totalWorkers)
@@ -201,11 +201,11 @@ const StakingPoolStats: React.FC = () => {
             </p>
           </div>
           <div className="text-center">
-            <p className="text-xs text-muted-foreground">활성률</p>
+            <p className="text-xs text-muted-foreground">Activity Rate</p>
             <p className="text-sm font-semibold">{activeRate}%</p>
           </div>
           <div className="text-center">
-            <p className="text-xs text-muted-foreground">비활성 워커</p>
+            <p className="text-xs text-muted-foreground">Inactive Workers</p>
             <p className="text-sm font-semibold">
               {poolStats.totalWorkers - poolStats.activeWorkers}
             </p>
@@ -218,12 +218,12 @@ const StakingPoolStats: React.FC = () => {
         <div className="space-y-4">
           <div className="flex items-center gap-2">
             <User className="w-5 h-5 text-primary" />
-            <h4 className="text-sm font-medium">개별 워커 스테이킹 조회</h4>
+            <h4 className="text-sm font-medium">Individual Worker Staking Query</h4>
           </div>
 
           <div className="flex gap-2">
             <Input
-              placeholder="워커 노드 ID 입력 (예: worker-001)"
+              placeholder="Enter worker node ID (e.g. worker-001)"
               value={workerNodeId}
               onChange={(e) => setWorkerNodeId(e.target.value)}
               onKeyDown={(e) => e.key === 'Enter' && handleSearchWorkerStake()}
@@ -240,7 +240,7 @@ const StakingPoolStats: React.FC = () => {
               ) : (
                 <Search className="w-4 h-4" />
               )}
-              조회
+              Search
             </Button>
           </div>
 
@@ -252,11 +252,11 @@ const StakingPoolStats: React.FC = () => {
             >
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-sm text-muted-foreground">워커 ID</p>
+                  <p className="text-sm text-muted-foreground">Worker ID</p>
                   <p className="font-mono text-xs mt-1">{workerNodeId}</p>
                 </div>
                 <div className="text-right">
-                  <p className="text-sm text-muted-foreground">스테이킹 금액</p>
+                  <p className="text-sm text-muted-foreground">Staking Amount</p>
                   <p className="text-lg font-bold text-primary">
                     {workerRegistryService.formatStake(workerStake)} SUI
                   </p>
@@ -264,7 +264,7 @@ const StakingPoolStats: React.FC = () => {
               </div>
               {workerStake === 0 && (
                 <p className="text-xs text-yellow-600 mt-2">
-                  ⚠️ 해당 워커가 존재하지 않거나 스테이킹이 없습니다
+                  ⚠️ The worker does not exist or has no staking
                 </p>
               )}
             </motion.div>

@@ -76,8 +76,8 @@ const MonitoringDashboard: React.FC<MonitoringDashboardProps> = ({
     {
       id: '1',
       type: 'performance',
-      title: '응답 시간 증가',
-      message: '평균 응답 시간이 150ms를 초과했습니다.',
+      title: 'Response Time Increase',
+      message: 'Average response time exceeded 150ms.',
       severity: 'medium',
       createdAt: new Date(Date.now() - 300000),
       resolved: false
@@ -85,8 +85,8 @@ const MonitoringDashboard: React.FC<MonitoringDashboardProps> = ({
     {
       id: '2',
       type: 'cost',
-      title: '예산 초과 경고',
-      message: '일일 예산의 80%를 사용했습니다.',
+      title: 'Budget Overage Warning',
+      message: 'Used 80% of daily budget.',
       severity: 'high',
       createdAt: new Date(Date.now() - 600000),
       resolved: false
@@ -96,9 +96,9 @@ const MonitoringDashboard: React.FC<MonitoringDashboardProps> = ({
   const [selectedTimeRange, setSelectedTimeRange] = useState<'1h' | '24h' | '7d' | '30d'>('24h')
   const [chartData, setChartData] = useState<number[]>([65, 59, 80, 81, 56, 55, 70, 72, 68, 75, 82, 78])
   const [pieData, setPieData] = useState([
-    { name: '성공', value: 85, color: 'bg-green-500' },
-    { name: '경고', value: 10, color: 'bg-yellow-500' },
-    { name: '실패', value: 5, color: 'bg-red-500' }
+    { name: 'Success', value: 85, color: 'bg-green-500' },
+    { name: 'Warning', value: 10, color: 'bg-yellow-500' },
+    { name: 'Error', value: 5, color: 'bg-red-500' }
   ])
   const [cpuHistory, setCpuHistory] = useState<number[]>([])
   const [memoryHistory, setMemoryHistory] = useState<number[]>([])
@@ -131,9 +131,9 @@ const MonitoringDashboard: React.FC<MonitoringDashboardProps> = ({
       const warning = Math.floor(Math.random() * 10) + 5
       const error = 100 - success - warning
       setPieData([
-        { name: '성공', value: success, color: 'bg-green-500' },
-        { name: '경고', value: warning, color: 'bg-yellow-500' },
-        { name: '실패', value: error, color: 'bg-red-500' }
+        { name: 'Success', value: success, color: 'bg-green-500' },
+        { name: 'Warning', value: warning, color: 'bg-yellow-500' },
+        { name: 'Error', value: error, color: 'bg-red-500' }
       ])
 
       // 랜덤 로그 추가
@@ -198,7 +198,7 @@ const MonitoringDashboard: React.FC<MonitoringDashboardProps> = ({
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h2 className="text-2xl font-bold">모니터링 대시보드</h2>
+          <h2 className="text-2xl font-bold">Monitoring Dashboard</h2>
           <p className="text-muted-foreground">
             {deployment.projectId} - {deployment.version}
           </p>
@@ -209,17 +209,17 @@ const MonitoringDashboard: React.FC<MonitoringDashboardProps> = ({
             variant={deployment.status === 'running' ? 'default' : 'secondary'}
             className={deployment.status === 'running' ? 'bg-green-500' : ''}
           >
-            {deployment.status === 'running' ? '실행중' : deployment.status}
+            {deployment.status === 'running' ? 'Running' : deployment.status}
           </Badge>
 
           <Button variant="outline" size="sm">
             <Settings className="w-4 h-4 mr-2" />
-            설정
+            Settings
           </Button>
 
           <Button variant="outline" size="sm">
             <Download className="w-4 h-4 mr-2" />
-            리포트
+            Report
           </Button>
         </div>
       </div>
@@ -255,7 +255,7 @@ const MonitoringDashboard: React.FC<MonitoringDashboardProps> = ({
             <div className="relative">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-sm font-medium text-muted-foreground">총 요청</p>
+                  <p className="text-sm font-medium text-muted-foreground">Total Requests</p>
                   <motion.p
                     key={metrics.requests}
                     className="text-2xl font-bold"
@@ -277,7 +277,7 @@ const MonitoringDashboard: React.FC<MonitoringDashboardProps> = ({
               <div className="flex items-center mt-2 text-sm">
                 <TrendingUp className="w-4 h-4 text-green-600 mr-1" />
                 <span className="text-green-600">+12.3%</span>
-                <span className="text-muted-foreground ml-1">전일 대비</span>
+                <span className="text-muted-foreground ml-1">vs yesterday</span>
               </div>
             </div>
           </Card>
@@ -291,7 +291,7 @@ const MonitoringDashboard: React.FC<MonitoringDashboardProps> = ({
           <Card className="p-4">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm font-medium text-muted-foreground">에러율</p>
+                <p className="text-sm font-medium text-muted-foreground">Error Rate</p>
                 <p className="text-2xl font-bold">{errorRate.toFixed(2)}%</p>
               </div>
               <div className="w-10 h-10 rounded-full bg-red-100 flex items-center justify-center">
@@ -314,7 +314,7 @@ const MonitoringDashboard: React.FC<MonitoringDashboardProps> = ({
           <Card className="p-4">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm font-medium text-muted-foreground">평균 응답시간</p>
+                <p className="text-sm font-medium text-muted-foreground">Avg Response Time</p>
                 <p className="text-2xl font-bold">{Math.round(metrics.avgLatency)}ms</p>
               </div>
               <div className="w-10 h-10 rounded-full bg-yellow-100 flex items-center justify-center">
@@ -337,7 +337,7 @@ const MonitoringDashboard: React.FC<MonitoringDashboardProps> = ({
           <Card className="p-4">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm font-medium text-muted-foreground">일일 비용</p>
+                <p className="text-sm font-medium text-muted-foreground">Daily Cost</p>
                 <p className="text-2xl font-bold">{formatCurrency(metrics.cost)} SUI</p>
               </div>
               <div className="w-10 h-10 rounded-full bg-green-100 flex items-center justify-center">
@@ -345,7 +345,7 @@ const MonitoringDashboard: React.FC<MonitoringDashboardProps> = ({
               </div>
             </div>
             <div className="flex items-center mt-2 text-sm">
-              <span className="text-muted-foreground">예산: {formatCurrency(deployment.resources.budget)} SUI</span>
+              <span className="text-muted-foreground">Budget: {formatCurrency(deployment.resources.budget)} SUI</span>
             </div>
             <Progress
               value={(metrics.cost / deployment.resources.budget) * 100}
@@ -360,19 +360,19 @@ const MonitoringDashboard: React.FC<MonitoringDashboardProps> = ({
         <TabsList className="grid w-full grid-cols-4">
           <TabsTrigger value="performance">
             <BarChart3 className="w-4 h-4 mr-2" />
-            성능
+            Performance
           </TabsTrigger>
           <TabsTrigger value="logs">
             <Eye className="w-4 h-4 mr-2" />
-            로그
+            Logs
           </TabsTrigger>
           <TabsTrigger value="alerts">
             <AlertTriangle className="w-4 h-4 mr-2" />
-            알림
+            Alerts
           </TabsTrigger>
           <TabsTrigger value="resources">
             <Server className="w-4 h-4 mr-2" />
-            리소스
+            Resources
           </TabsTrigger>
         </TabsList>
 
@@ -381,7 +381,7 @@ const MonitoringDashboard: React.FC<MonitoringDashboardProps> = ({
             <Card className="p-4">
               <h3 className="font-semibold mb-4 flex items-center">
                 <PieChart className="w-5 h-5 mr-2" />
-                응답 시간 분포
+                Response Time Distribution
               </h3>
               <div className="h-64 relative">
                 {/* 파이 차트 */}
@@ -416,7 +416,7 @@ const MonitoringDashboard: React.FC<MonitoringDashboardProps> = ({
                     </svg>
                     <div className="absolute inset-0 flex flex-col items-center justify-center">
                       <p className="text-2xl font-bold">{pieData[0].value}%</p>
-                      <p className="text-sm text-muted-foreground">성공률</p>
+                      <p className="text-sm text-muted-foreground">Success Rate</p>
                     </div>
                   </div>
                 </div>
@@ -435,7 +435,7 @@ const MonitoringDashboard: React.FC<MonitoringDashboardProps> = ({
             <Card className="p-4">
               <h3 className="font-semibold mb-4 flex items-center">
                 <BarChart3 className="w-5 h-5 mr-2" />
-                요청량 추이
+                Request Volume Trend
               </h3>
               <div className="h-64 relative">
                 <div className="absolute inset-0 flex items-end justify-between px-2">
@@ -471,10 +471,10 @@ const MonitoringDashboard: React.FC<MonitoringDashboardProps> = ({
           </div>
 
           <Card className="p-4">
-            <h3 className="font-semibold mb-4">가동률</h3>
+            <h3 className="font-semibold mb-4">Uptime</h3>
             <div className="space-y-4">
               <div className="flex items-center justify-between">
-                <span>전체 가동률</span>
+                <span>Overall Uptime</span>
                 <span className="font-semibold">{metrics.uptime}%</span>
               </div>
               <Progress value={metrics.uptime} className="h-2" />
@@ -499,17 +499,17 @@ const MonitoringDashboard: React.FC<MonitoringDashboardProps> = ({
         <TabsContent value="logs" className="space-y-4">
           <Card className="p-4">
             <div className="flex items-center justify-between mb-4">
-              <h3 className="font-semibold">실시간 로그</h3>
+              <h3 className="font-semibold">Real-time Logs</h3>
               <div className="flex items-center gap-2">
                 {realTime && (
                   <div className="flex items-center gap-2">
                     <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse" />
-                    <span className="text-sm text-muted-foreground">실시간</span>
+                    <span className="text-sm text-muted-foreground">Real-time</span>
                   </div>
                 )}
                 <Button variant="outline" size="sm">
                   <Download className="w-4 h-4 mr-2" />
-                  다운로드
+                  Download
                 </Button>
               </div>
             </div>
@@ -547,9 +547,9 @@ const MonitoringDashboard: React.FC<MonitoringDashboardProps> = ({
         <TabsContent value="alerts" className="space-y-4">
           <Card className="p-4">
             <div className="flex items-center justify-between mb-4">
-              <h3 className="font-semibold">활성 알림</h3>
+              <h3 className="font-semibold">Active Alerts</h3>
               <Badge variant="outline">
-                {alerts.filter(a => !a.resolved).length}개 미해결
+                {alerts.filter(a => !a.resolved).length} unresolved
               </Badge>
             </div>
 
@@ -575,7 +575,7 @@ const MonitoringDashboard: React.FC<MonitoringDashboardProps> = ({
                       </p>
                     </div>
                     <Button variant="ghost" size="sm">
-                      해결
+                      Resolve
                     </Button>
                   </div>
                 </motion.div>
@@ -589,7 +589,7 @@ const MonitoringDashboard: React.FC<MonitoringDashboardProps> = ({
             <Card className="p-4">
               <h3 className="font-semibold mb-4 flex items-center">
                 <Cpu className="w-5 h-5 mr-2" />
-                CPU 사용률
+                CPU Usage
               </h3>
               <div className="h-48 relative">
                 {/* 실시간 라인 차트 */}
@@ -607,7 +607,7 @@ const MonitoringDashboard: React.FC<MonitoringDashboardProps> = ({
                 </svg>
                 <div className="absolute bottom-0 left-0 right-0 text-center">
                   <p className="text-2xl font-bold">{cpuHistory[cpuHistory.length - 1] || 0}%</p>
-                  <p className="text-xs text-muted-foreground">현재 사용률</p>
+                  <p className="text-xs text-muted-foreground">Current Usage</p>
                 </div>
               </div>
             </Card>
@@ -615,7 +615,7 @@ const MonitoringDashboard: React.FC<MonitoringDashboardProps> = ({
             <Card className="p-4">
               <h3 className="font-semibold mb-4 flex items-center">
                 <HardDrive className="w-5 h-5 mr-2" />
-                메모리 사용률
+                Memory Usage
               </h3>
               <div className="h-48 relative">
                 {/* 실시간 라인 차트 */}
@@ -633,7 +633,7 @@ const MonitoringDashboard: React.FC<MonitoringDashboardProps> = ({
                 </svg>
                 <div className="absolute bottom-0 left-0 right-0 text-center">
                   <p className="text-2xl font-bold">{memoryHistory[memoryHistory.length - 1] || 0}%</p>
-                  <p className="text-xs text-muted-foreground">현재 사용률</p>
+                  <p className="text-xs text-muted-foreground">Current Usage</p>
                 </div>
               </div>
             </Card>
@@ -642,12 +642,12 @@ const MonitoringDashboard: React.FC<MonitoringDashboardProps> = ({
           <Card className="p-4">
             <h3 className="font-semibold mb-4 flex items-center">
               <Wifi className="w-5 h-5 mr-2" />
-              네트워크 트래픽
+              Network Traffic
             </h3>
             <div className="h-64 relative">
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-4">
-                  <h4 className="text-sm font-medium text-muted-foreground">수신 (Inbound)</h4>
+                  <h4 className="text-sm font-medium text-muted-foreground">Inbound</h4>
                   <div className="space-y-2">
                     <motion.div
                       className="h-32 bg-gradient-to-t from-blue-500/20 to-blue-500/5 rounded"
@@ -665,7 +665,7 @@ const MonitoringDashboard: React.FC<MonitoringDashboardProps> = ({
                   </div>
                 </div>
                 <div className="space-y-4">
-                  <h4 className="text-sm font-medium text-muted-foreground">송신 (Outbound)</h4>
+                  <h4 className="text-sm font-medium text-muted-foreground">Outbound</h4>
                   <div className="space-y-2">
                     <motion.div
                       className="h-32 bg-gradient-to-t from-green-500/20 to-green-500/5 rounded"
