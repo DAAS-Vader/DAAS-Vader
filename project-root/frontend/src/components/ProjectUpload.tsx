@@ -2,7 +2,7 @@
 
 import React, { useState, useCallback, useRef } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { Upload, Github, File, X, Check, AlertCircle, Folder, GitBranch, Star, Clock, ExternalLink, CheckCircle2, XCircle, Loader } from 'lucide-react'
+import { Upload, Package, File, X, Folder, CheckCircle2, XCircle, Loader, HardDrive, FileText, ChevronRight, ChevronDown, FolderOpen } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Card } from '@/components/ui/card'
@@ -10,574 +10,505 @@ import { Badge } from '@/components/ui/badge'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Progress } from '@/components/ui/progress'
 import { WalletInfo } from '@/types'
-import { useSignAndExecuteTransaction } from '@mysten/dapp-kit'
-import { Transaction } from '@mysten/sui/transactions'
+import { useCurrentAccount } from '@mysten/dapp-kit'
+import { uploadToWalrus, type WalrusProjectUploadResult } from '@/lib/walrus-client'
 
 interface FileUpload {
   id: string
   file: File
   progress: number
   status: 'uploading' | 'completed' | 'error'
-  path: string // 파일의 전체 경로
+  path: string
+  type: 'project' | 'docker'
+}
+
+// TypeScript declaration for webkitdirectory
+declare module 'react' {
+  interface HTMLAttributes<T> extends AriaAttributes, DOMAttributes<T> {
+    webkitdirectory?: string;
+  }
 }
 
 interface FileTreeNode {
   name: string
   type: 'file' | 'folder'
-  children: { [key: string]: FileTreeNode }
-  files: FileUpload[]
-  isExpanded: boolean
+  path: string
+  size?: number
+  children?: FileTreeNode[]
+  isExpanded?: boolean
 }
 
-interface GitHubRepo {
-  id: number
-  name: string
-  full_name: string
-  description: string
-  stargazers_count: number
-  language: string
-  updated_at: string
+
+// Match the parent component's expected interface
+interface UploadResult {
+  success: boolean
+  message: string
+  cid_code?: string
+  blobId?: string
 }
 
 interface ProjectUploadProps {
   onFileUpload?: (files: File[]) => Promise<void>
-  onUploadComplete?: (uploadResult: any) => void
-  onGitHubConnect?: (repo: GitHubRepo) => Promise<void>
+  onUploadComplete?: (uploadResult: UploadResult) => void
   maxFileSize?: number
   acceptedFileTypes?: string[]
-  backendUrl?: string
   walletInfo?: WalletInfo | null
 }
 
 const ProjectUpload: React.FC<ProjectUploadProps> = ({
-  onFileUpload,
   onUploadComplete,
-  onGitHubConnect,
-  maxFileSize = 10 * 1024 * 1024, // 10MB
-  acceptedFileTypes = ['.js', '.ts', '.jsx', '.tsx', '.py', '.java', '.cpp', '.c', '.go', '.rs', '.json', '.md', '.txt'],
-  backendUrl = 'http://localhost:3001',
+  maxFileSize = 500 * 1024 * 1024, // 500MB for docker images
+  acceptedFileTypes = ['.zip', '.tar.gz', '.tgz', '.tar', '.docker', '.dockerimage'],
   walletInfo
 }) => {
-  const [activeTab, setActiveTab] = useState<'upload' | 'github'>('upload')
+  // Wallet hooks
+  const currentAccount = useCurrentAccount()
+
+  const [activeTab, setActiveTab] = useState<'project' | 'docker'>('project')
   const [isDragOver, setIsDragOver] = useState(false)
   const [uploads, setUploads] = useState<FileUpload[]>([])
-  const [githubToken, setGithubToken] = useState('')
-  const [githubRepos, setGithubRepos] = useState<GitHubRepo[]>([])
-  const [selectedRepo, setSelectedRepo] = useState<GitHubRepo | null>(null)
-  const [isConnecting, setIsConnecting] = useState(false)
-  const [connectionStatus, setConnectionStatus] = useState<'idle' | 'connected' | 'error'>('idle')
-  const [uploadResponse, setUploadResponse] = useState<any>(null)
-  const [isDirectoryMode, setIsDirectoryMode] = useState(false)
-  const [expandedFolders, setExpandedFolders] = useState<Set<string>>(new Set())
+  const [uploadResponse, setUploadResponse] = useState<WalrusProjectUploadResult | null>(null)
+  const [dockerImageName, setDockerImageName] = useState('')
+  const [fileTree, setFileTree] = useState<FileTreeNode[]>([])
+  const [selectedFiles, setSelectedFiles] = useState<File[]>([])
   const [uploadProgress, setUploadProgress] = useState<{
-    stage: 'idle' | 'preparing' | 'signing' | 'uploading' | 'completed' | 'error'
+    stage: 'idle' | 'preparing' | 'processing' | 'uploading' | 'completed' | 'error'
     message: string
     txHash?: string
     blobId?: string
+    percentage?: number
   }>({ stage: 'idle', message: '' })
-  const [showUploadDetails, setShowUploadDetails] = useState(false)
+
   const fileInputRef = useRef<HTMLInputElement>(null)
+  const dockerFileInputRef = useRef<HTMLInputElement>(null)
   const folderInputRef = useRef<HTMLInputElement>(null)
-  const { mutate: signAndExecuteTransaction } = useSignAndExecuteTransaction()
 
-  const handleDragOver = useCallback((e: React.DragEvent) => {
-    e.preventDefault()
-    setIsDragOver(true)
-  }, [])
-
-  const handleDragLeave = useCallback((e: React.DragEvent) => {
-    e.preventDefault()
-    setIsDragOver(false)
-  }, [])
-
-  const handleDrop = useCallback(async (e: React.DragEvent) => {
-    e.preventDefault()
-    setIsDragOver(false)
-
-    const items = Array.from(e.dataTransfer.items)
-    const allFiles: File[] = []
-
-    // 폴더와 파일을 모두 처리하는 함수
-    const traverseFileTree = (item: any): Promise<File[]> => {
-      return new Promise((resolve) => {
-        if (item.isFile) {
-          item.file((file: File) => {
-            resolve([file])
-          })
-        } else if (item.isDirectory) {
-          const dirReader = item.createReader()
-          const files: File[] = []
-
-          const readEntries = () => {
-            dirReader.readEntries(async (entries: any[]) => {
-              if (entries.length) {
-                for (const entry of entries) {
-                  const entryFiles = await traverseFileTree(entry)
-                  files.push(...entryFiles)
-                }
-                readEntries() // 더 많은 항목이 있을 수 있으므로 재귀적으로 호출
-              } else {
-                resolve(files)
-              }
-            })
-          }
-          readEntries()
-        }
-      })
-    }
-
-    // 모든 아이템을 처리
-    for (const item of items) {
-      if (item.kind === 'file') {
-        const entry = item.webkitGetAsEntry()
-        if (entry) {
-          const files = await traverseFileTree(entry)
-          allFiles.push(...files)
-        }
-      }
-    }
-
-    // 아이템이 없으면 기본 파일 처리
-    if (allFiles.length === 0) {
-      const files = Array.from(e.dataTransfer.files)
-      allFiles.push(...files)
-    }
-
-    handleFiles(allFiles)
-  }, [])
-
-  const handleFileSelect = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
-    const files = Array.from(e.target.files || [])
-    handleFiles(files)
-  }, [])
-
-  const handleSelectFiles = useCallback(() => {
-    setIsDirectoryMode(false)
-    fileInputRef.current?.click()
-  }, [])
-
-  const handleSelectFolder = useCallback(() => {
-    setIsDirectoryMode(true)
-    folderInputRef.current?.click()
-  }, [])
-
-  // 파일 트리 구조 생성
-  const buildFileTree = useCallback((uploads: FileUpload[]): FileTreeNode => {
-    const root: FileTreeNode = {
-      name: 'root',
-      type: 'folder',
-      children: {},
-      files: [],
-      isExpanded: true
-    }
-
-    uploads.forEach(upload => {
-      const pathParts = upload.path.split('/').filter(part => part.length > 0)
-      let currentNode = root
-
-      // 경로의 각 부분을 순회하며 트리 구조 생성
-      for (let i = 0; i < pathParts.length - 1; i++) {
-        const part = pathParts[i]
-        if (!currentNode.children[part]) {
-          currentNode.children[part] = {
-            name: part,
-            type: 'folder',
-            children: {},
-            files: [],
-            isExpanded: expandedFolders.has(pathParts.slice(0, i + 1).join('/'))
-          }
-        }
-        currentNode = currentNode.children[part]
-      }
-
-      // 마지막 부분은 파일
-      const fileName = pathParts[pathParts.length - 1] || upload.file.name
-      currentNode.files.push(upload)
-    })
-
-    return root
-  }, [expandedFolders])
-
-  // 폴더 토글 함수
-  const toggleFolder = useCallback((folderPath: string) => {
-    setExpandedFolders(prev => {
-      const newSet = new Set(prev)
-      if (newSet.has(folderPath)) {
-        newSet.delete(folderPath)
-      } else {
-        newSet.add(folderPath)
-      }
-      return newSet
-    })
-  }, [])
-
-  // 파일 트리 노드 렌더링
-  const renderFileTreeNode = useCallback((node: FileTreeNode, path: string = '', depth: number = 0) => {
-    const items = []
-
-    // 폴더들 먼저 렌더링
-    Object.entries(node.children).forEach(([name, childNode]) => {
-      const fullPath = path ? `${path}/${name}` : name
-      const isExpanded = expandedFolders.has(fullPath)
-
-      items.push(
-        <motion.div
-          key={`folder-${fullPath}`}
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          className={`select-none ${depth > 0 ? 'ml-' + (depth * 4) : ''}`}
-        >
-          <div
-            className="flex items-center gap-2 p-2 rounded cursor-pointer hover:bg-muted/50"
-            onClick={() => toggleFolder(fullPath)}
-          >
-            <motion.div
-              animate={{ rotate: isExpanded ? 90 : 0 }}
-              transition={{ duration: 0.2 }}
-            >
-              <Folder className="w-4 h-4 text-blue-500" />
-            </motion.div>
-            <span className="text-sm font-medium">{name}</span>
-            <span className="text-xs text-muted-foreground">
-              ({Object.keys(childNode.children).length + childNode.files.length}개 항목)
-            </span>
-          </div>
-
-          <AnimatePresence>
-            {isExpanded && (
-              <motion.div
-                initial={{ opacity: 0, height: 0 }}
-                animate={{ opacity: 1, height: 'auto' }}
-                exit={{ opacity: 0, height: 0 }}
-                transition={{ duration: 0.2 }}
-              >
-                {renderFileTreeNode(childNode, fullPath, depth + 1)}
-              </motion.div>
-            )}
-          </AnimatePresence>
-        </motion.div>
-      )
-    })
-
-    // 파일들 렌더링
-    node.files.forEach(upload => {
-      items.push(
-        <motion.div
-          key={upload.id}
-          initial={{ opacity: 0, x: -20 }}
-          animate={{ opacity: 1, x: 0 }}
-          exit={{ opacity: 0, x: 20 }}
-          className={`flex items-center gap-3 p-3 rounded-lg bg-muted/30 border border-border/50 ${depth > 0 ? 'ml-' + (depth * 4) : ''}`}
-        >
-          <div className="w-8 h-8 rounded bg-primary/10 flex items-center justify-center flex-shrink-0">
-            <File className="w-4 h-4 text-primary" />
-          </div>
-
-          <div className="flex-1 min-w-0">
-            <p className="font-medium text-sm truncate">{upload.file.name}</p>
-            <p className="text-xs text-muted-foreground">{formatFileSize(upload.file.size)}</p>
-            {upload.status === 'uploading' && (
-              <Progress value={upload.progress} className="mt-2 h-1" />
-            )}
-          </div>
-
-          <div className="flex items-center gap-2">
-            {upload.status === 'completed' && (
-              <Check className="w-5 h-5 text-green-500" />
-            )}
-            {upload.status === 'error' && (
-              <AlertCircle className="w-5 h-5 text-red-500" />
-            )}
-            <Button
-              variant="ghost"
-              size="icon"
-              className="w-6 h-6"
-              onClick={() => {
-                setUploads(prev => prev.filter(u => u.id !== upload.id))
-              }}
-            >
-              <X className="w-3 h-3" />
-            </Button>
-          </div>
-        </motion.div>
-      )
-    })
-
-    return items
-  }, [expandedFolders, setUploads])
-
-  // 새 업로드 시작 시 상태 초기화
   const resetUploadState = useCallback(() => {
     setUploadProgress({ stage: 'idle', message: '' })
-    setShowUploadDetails(false)
+    setUploads([])
     setUploadResponse(null)
+    setFileTree([])
+    setSelectedFiles([])
   }, [])
 
-  const handleFiles = useCallback(async (files: File[]) => {
-    // 새 업로드 시작 시 이전 상태 초기화
-    resetUploadState()
-    const validFiles = files.filter(file => {
-      const extension = '.' + file.name.split('.').pop()?.toLowerCase()
-      const filePath = (file as any).webkitRelativePath || file.name
+  // 파일 트리 생성 함수 - 개선된 버전
+  const buildFileTree = (files: File[]): FileTreeNode[] => {
+    const root: Map<string, FileTreeNode> = new Map()
 
-      // 제외할 폴더/파일 패턴
-      const excludePatterns = [
-        'node_modules/',
-        '.git/',
-        '.next/',
-        'dist/',
-        'build/',
-        '.cache/',
-        'coverage/',
-        '.env',
-        '.env.local',
-        '.env.development',
-        '.env.production',
-        '.DS_Store',
-        'Thumbs.db',
-        '*.log'
-      ]
+    files.forEach(file => {
+      const pathParts = file.webkitRelativePath ?
+        file.webkitRelativePath.split('/') :
+        [file.name]
 
-      // 제외 패턴에 해당하는지 확인
-      const shouldExclude = excludePatterns.some(pattern => {
-        if (pattern.endsWith('/')) {
-          // 폴더 패턴
-          return filePath.includes(pattern)
-        } else if (pattern.includes('*')) {
-          // 와일드카드 패턴
-          const regex = new RegExp(pattern.replace('*', '.*'))
-          return regex.test(filePath)
-        } else {
-          // 정확한 파일명
-          return filePath.includes(pattern)
+      let currentPath = ''
+      let parentNode: FileTreeNode | null = null
+
+      pathParts.forEach((part, index) => {
+        const previousPath = currentPath
+        currentPath = currentPath ? `${currentPath}/${part}` : part
+        const isFile = index === pathParts.length - 1
+
+        if (!root.has(currentPath)) {
+          const newNode: FileTreeNode = {
+            name: part,
+            type: isFile ? 'file' : 'folder',
+            path: currentPath,
+            size: isFile ? file.size : undefined,
+            children: isFile ? undefined : [],
+            isExpanded: index === 0 // 첫 번째 레벨만 기본 열림
+          }
+
+          root.set(currentPath, newNode)
+
+          // 부모 노드에 연결
+          if (parentNode && parentNode.children) {
+            parentNode.children.push(newNode)
+          }
+        }
+
+        if (!isFile) {
+          parentNode = root.get(currentPath) || null
         }
       })
-
-      return !shouldExclude && acceptedFileTypes.includes(extension) && file.size <= maxFileSize
     })
 
-    const newUploads: FileUpload[] = validFiles.map(file => ({
-      id: Math.random().toString(36).substr(2, 9),
+    // 최상위 노드만 반환
+    const topLevelNodes: FileTreeNode[] = []
+    root.forEach((node, path) => {
+      if (!path.includes('/')) {
+        topLevelNodes.push(node)
+      }
+    })
+
+    // 이름순으로 정렬 (폴더 먼저, 그 다음 파일)
+    const sortNodes = (nodes: FileTreeNode[]): FileTreeNode[] => {
+      return nodes.sort((a, b) => {
+        if (a.type !== b.type) {
+          return a.type === 'folder' ? -1 : 1
+        }
+        return a.name.localeCompare(b.name)
+      }).map(node => {
+        if (node.children) {
+          return { ...node, children: sortNodes(node.children) }
+        }
+        return node
+      })
+    }
+
+    return sortNodes(topLevelNodes)
+  }
+
+  // 파일 트리 토글
+  const toggleTreeNode = (path: string) => {
+    const toggleNode = (nodes: FileTreeNode[]): FileTreeNode[] => {
+      return nodes.map(node => {
+        if (node.path === path) {
+          return { ...node, isExpanded: !node.isExpanded }
+        }
+        if (node.children) {
+          return { ...node, children: toggleNode(node.children) }
+        }
+        return node
+      })
+    }
+    setFileTree(toggleNode(fileTree))
+  }
+
+  // 파일 트리 렌더링
+  const renderFileTree = (nodes: FileTreeNode[], level = 0) => {
+    return nodes.map(node => (
+      <div key={node.path} className="select-none">
+        <div
+          className={`flex items-center py-1 px-2 hover:bg-muted/50 rounded cursor-pointer`}
+          style={{ paddingLeft: `${level * 20 + 8}px` }}
+          onClick={() => node.type === 'folder' && toggleTreeNode(node.path)}
+        >
+          {node.type === 'folder' ? (
+            <>
+              {node.isExpanded ? (
+                <ChevronDown className="w-4 h-4 mr-1 text-muted-foreground" />
+              ) : (
+                <ChevronRight className="w-4 h-4 mr-1 text-muted-foreground" />
+              )}
+              {node.isExpanded ? (
+                <FolderOpen className="w-4 h-4 mr-2 text-blue-500" />
+              ) : (
+                <Folder className="w-4 h-4 mr-2 text-blue-500" />
+              )}
+            </>
+          ) : (
+            <File className="w-4 h-4 mr-2 ml-5 text-muted-foreground" />
+          )}
+          <span className="text-sm">{node.name}</span>
+          {node.size && (
+            <span className="ml-auto text-xs text-muted-foreground">
+              {formatFileSize(node.size)}
+            </span>
+          )}
+        </div>
+        {node.type === 'folder' && node.isExpanded && node.children && (
+          <AnimatePresence>
+            <motion.div
+              initial={{ opacity: 0, height: 0 }}
+              animate={{ opacity: 1, height: 'auto' }}
+              exit={{ opacity: 0, height: 0 }}
+              transition={{ duration: 0.2 }}
+            >
+              {renderFileTree(node.children, level + 1)}
+            </motion.div>
+          </AnimatePresence>
+        )}
+      </div>
+    ))
+  }
+
+  // Walrus에 직접 업로드하는 함수
+  const uploadToWalrusDirectly = useCallback(async (files: File[], imageNam: string = '') => {
+    try {
+      if (!currentAccount) {
+        throw new Error('지갑을 먼저 연결해주세요')
+      }
+
+      setUploadProgress({
+        stage: 'preparing',
+        message: activeTab === 'docker' ? 'Docker 이미지 준비 중...' : '프로젝트 준비 중...',
+        percentage: 10
+      })
+
+      setUploadProgress({
+        stage: 'uploading',
+        message: 'Walrus에 업로드 중...',
+        percentage: 50
+      })
+
+      let result: WalrusProjectUploadResult
+
+      if (files.length === 1 && (files[0].name.endsWith('.zip') || files[0].name.endsWith('.tar') || files[0].name.endsWith('.tar.gz'))) {
+        // 단일 압축 파일은 직접 업로드
+        const uploadResult = await uploadToWalrus(files[0], {
+          walletAddress: currentAccount.address,
+          epochs: 10,
+          permanent: false,
+          metadata: {
+            projectName: activeTab === 'docker' ? (imageNam || files[0].name) : files[0].name,
+            fileType: activeTab === 'docker' ? 'docker-image' : 'project-archive',
+            uploadType: activeTab
+          }
+        })
+
+        result = {
+          status: uploadResult.status === 'error' ? 'error' : 'success',
+          codeBlobId: uploadResult.blobId,
+          codeUrl: uploadResult.url,
+          codeSize: uploadResult.size,
+          error: uploadResult.error
+        }
+      } else {
+        // 여러 파일들은 JSON으로 묶어서 업로드
+        const filesData: Array<{ path: string; content: string; size: number }> = []
+
+        for (const file of files) {
+          const content = await file.text()
+          filesData.push({
+            path: file.webkitRelativePath || file.name,
+            content,
+            size: file.size
+          })
+        }
+
+        const projectData = {
+          projectName: activeTab === 'docker' ? imageNam : 'project-folder',
+          fileType: 'project-folder',
+          uploadType: activeTab,
+          timestamp: new Date().toISOString(),
+          totalFiles: files.length,
+          totalSize: files.reduce((sum, f) => sum + f.size, 0),
+          files: filesData,
+          isArchive: false
+        }
+
+        // JSON을 Blob으로 변환하여 업로드
+        const jsonBlob = new Blob([JSON.stringify(projectData, null, 2)], { type: 'application/json' })
+
+        const uploadResult = await uploadToWalrus(jsonBlob, {
+          walletAddress: currentAccount.address,
+          epochs: 10,
+          permanent: false,
+          metadata: {
+            projectName: projectData.projectName,
+            fileType: projectData.fileType,
+            totalFiles: projectData.totalFiles
+          }
+        })
+
+        result = {
+          status: uploadResult.status === 'error' ? 'error' : 'success',
+          codeBlobId: uploadResult.blobId,
+          codeUrl: uploadResult.url,
+          codeSize: uploadResult.size,
+          error: uploadResult.error
+        }
+      }
+
+      if (result.status === 'success' || result.status === 'partial') {
+        setUploadProgress({
+          stage: 'completed',
+          message: '업로드 완료!',
+          blobId: result.codeBlobId || result.dockerBlobId || 'unknown',
+          txHash: result.codeUrl || result.dockerUrl || 'unknown',
+          percentage: 100
+        })
+
+        setUploadResponse(result)
+
+        // 콘솔에 다운로드 URL 출력
+        if (result.codeUrl) {
+          console.log('🌐 프로젝트 다운로드 URL:', result.codeUrl)
+          console.log('💾 프로젝트 Blob ID:', result.codeBlobId)
+        }
+        if (result.dockerUrl) {
+          console.log('🐳 Docker 이미지 다운로드 URL:', result.dockerUrl)
+          console.log('💾 Docker Blob ID:', result.dockerBlobId)
+        }
+
+        if (onUploadComplete) {
+          onUploadComplete({
+            success: true,
+            message: '업로드가 성공적으로 완료되었습니다',
+            cid_code: result.codeBlobId,
+            blobId: result.codeBlobId || result.dockerBlobId
+          })
+        }
+      } else {
+        throw new Error(result.error || '업로드 실패')
+      }
+
+      return result
+    } catch (error) {
+      console.error('Upload error:', error)
+      setUploadProgress({
+        stage: 'error',
+        message: `업로드 실패: ${error instanceof Error ? error.message : '알 수 없는 오류'}`,
+        percentage: 0
+      })
+      throw error
+    }
+  }, [activeTab, currentAccount, onUploadComplete])
+
+
+  const handleFolderSelect = useCallback((event: React.ChangeEvent<HTMLInputElement>) => {
+    const files = event.target.files
+    if (!files || files.length === 0) return
+
+    const fileArray = Array.from(files)
+    setSelectedFiles(fileArray)
+    const tree = buildFileTree(fileArray)
+    setFileTree(tree)
+
+    // 폴더가 선택되면 자동으로 업로드 시작하지 않고 사용자가 확인 후 업로드하도록
+    console.log(`${fileArray.length}개 파일이 선택되었습니다`)
+  }, [])
+
+  const handleUploadSelectedFiles = useCallback(async () => {
+    if (!currentAccount) {
+      alert('지갑을 먼저 연결해주세요')
+      return
+    }
+
+    if (selectedFiles.length === 0) {
+      alert('업로드할 파일을 선택해주세요')
+      return
+    }
+
+    resetUploadState()
+
+    // 파일 업로드 항목 추가
+    const newUploads: FileUpload[] = selectedFiles.map((file, index) => ({
+      id: `${Date.now()}-${index}`,
       file,
       progress: 0,
-      status: 'uploading',
-      path: (file as any).webkitRelativePath || file.name // 웹킷 상대 경로 또는 파일명
+      status: 'uploading' as const,
+      path: file.webkitRelativePath || file.name,
+      type: 'project' as const
+    }))
+
+    setUploads(newUploads)
+
+    try {
+      await uploadToWalrusDirectly(selectedFiles, '')
+
+      // 업로드 상태 업데이트
+      setUploads(prev => prev.map(u => ({ ...u, status: 'completed', progress: 100 })))
+    } catch (error) {
+      console.error('Upload error:', error)
+      setUploads(prev => prev.map(u => ({ ...u, status: 'error', progress: 0 })))
+    }
+  }, [currentAccount, selectedFiles, uploadToWalrusDirectly, resetUploadState])
+
+  const handleFiles = useCallback(async (files: File[], uploadType: 'project' | 'docker') => {
+    if (!currentAccount) {
+      alert('지갑을 먼저 연결해주세요')
+      return
+    }
+
+    resetUploadState()
+
+    // 파일 유효성 검사
+    const validFiles = files.filter(file => {
+      if (file.size > maxFileSize) {
+        console.error(`File ${file.name} exceeds size limit`)
+        return false
+      }
+
+      if (uploadType === 'docker') {
+        // Docker 이미지 파일 확장자 확인
+        const isValid = file.name.endsWith('.tar') ||
+                       file.name.endsWith('.docker') ||
+                       file.name.endsWith('.dockerimage') ||
+                       file.type === 'application/x-tar'
+        if (!isValid) {
+          console.error(`File ${file.name} is not a valid Docker image file`)
+        }
+        return isValid
+      } else {
+        // 프로젝트 파일 확장자 확인
+        const isValid = acceptedFileTypes.some(type => file.name.endsWith(type))
+        if (!isValid) {
+          console.error(`File ${file.name} has invalid extension`)
+        }
+        return isValid
+      }
+    })
+
+    if (validFiles.length === 0) {
+      setUploadProgress({
+        stage: 'error',
+        message: uploadType === 'docker' ?
+          'Docker 이미지 파일(.tar)만 업로드 가능합니다' :
+          '유효한 프로젝트 파일을 선택해주세요'
+      })
+      return
+    }
+
+    // 새 업로드 항목 추가
+    const newUploads: FileUpload[] = validFiles.map((file, index) => ({
+      id: `${Date.now()}-${index}`,
+      file,
+      progress: 0,
+      status: 'uploading' as const,
+      path: file.name,
+      type: uploadType
     }))
 
     setUploads(prev => [...prev, ...newUploads])
 
-    // 실제 파일 업로드 진행
     try {
-      const formData = new FormData()
-      validFiles.forEach(file => {
-        formData.append('files', file)
-      })
+      // 모든 유효한 파일 업로드
+      const imageName = uploadType === 'docker' ? dockerImageName : ''
 
-      // 업로드 상세 정보 표시
-      setShowUploadDetails(true)
-      setUploadProgress({ stage: 'preparing', message: '트랜잭션 준비 중...' })
+      await uploadToWalrusDirectly(validFiles, imageName)
 
-      // 업로드 진행률 시뮬레이션
-      const progressInterval = setInterval(() => {
-        setUploads(prev => prev.map(u => {
-          if (newUploads.find(nu => nu.id === u.id)) {
-            const newProgress = Math.min(u.progress + Math.random() * 15, 90)
-            return { ...u, progress: newProgress }
-          }
-          return u
-        }))
-      }, 300)
+      // 업로드 상태 업데이트
+      setUploads(prev => prev.map(u =>
+        validFiles.includes(u.file) ? { ...u, status: 'completed', progress: 100 } : u
+      ))
 
-      if (!walletInfo?.connected || !walletInfo?.authSignature || !walletInfo?.address) {
-        throw new Error('먼저 지갑을 연결해주세요.')
-      }
-
-      // 1단계: 트랜잭션 준비
-      setUploadProgress({ stage: 'preparing', message: 'Walrus 업로드 트랜잭션 준비 중...' })
-
-      const prepareResponse = await fetch(`${backendUrl}/api/project/prepare-upload`, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${walletInfo.authSignature}`,
-          'x-wallet-address': walletInfo.address,
-        },
-        body: formData,
-      })
-
-      if (!prepareResponse.ok) {
-        const errorText = await prepareResponse.text()
-        throw new Error(`Transaction preparation failed: ${errorText}`)
-      }
-
-      const { txData, gasObjectId, gasBudget, metadata } = await prepareResponse.json()
-
-      // 2단계: 사용자 지갑으로 트랜잭션 서명 및 실행
-      setUploadProgress({ stage: 'signing', message: '지갑에서 트랜잭션 서명 중... 지갑 팝업을 확인해주세요.' })
-
-      const transaction = Transaction.from(txData)
-
-      // 프로미스를 사용하여 트랜잭션 결과를 기다림
-      const signedTransactionResult = await new Promise<any>((resolve, reject) => {
-        signAndExecuteTransaction(
-          { transaction },
-          {
-            onSuccess: (result) => {
-              console.log('Transaction signed successfully:', result)
-              setUploadProgress({
-                stage: 'uploading',
-                message: 'Walrus에 파일 업로드 중...',
-                txHash: result.digest
-              })
-              resolve(result)
-            },
-            onError: (error) => {
-              console.error('Transaction signing failed:', error)
-              setUploadProgress({
-                stage: 'error',
-                message: `트랜잭션 서명 실패: ${error?.message || error?.toString() || '알 수 없는 오류'}`
-              })
-              reject(error)
-            },
-          }
-        )
-      })
-
-      // 3단계: 서명된 트랜잭션으로 업로드 완료
-      setUploadProgress({
-        stage: 'uploading',
-        message: '업로드 완료 중...',
-        txHash: signedTransactionResult.digest
-      })
-
-      const completeResponse = await fetch(`${backendUrl}/api/project/complete-upload`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${walletInfo.authSignature}`,
-          'x-wallet-address': walletInfo.address,
-        },
-        body: JSON.stringify({
-          signedTransaction: signedTransactionResult.digest,
-          walletAddress: walletInfo.address,
-        }),
-      })
-
-      if (!completeResponse.ok) {
-        const errorText = await completeResponse.text()
-        throw new Error(`Upload completion failed: ${errorText}`)
-      }
-
-      clearInterval(progressInterval)
-
-      const result = await completeResponse.json()
-      setUploadResponse(result)
-
-      // 업로드 완료 상태로 업데이트
-      setUploads(prev => prev.map(u => {
-        if (newUploads.find(nu => nu.id === u.id)) {
-          return { ...u, progress: 100, status: 'completed' as const }
-        }
-        return u
-      }))
-
-      setUploadProgress({
-        stage: 'completed',
-        message: '업로드가 성공적으로 완료되었습니다!',
-        txHash: signedTransactionResult.digest,
-        blobId: result.cid_code || result.blobId
-      })
-
-      if (onFileUpload) {
-        await onFileUpload(validFiles)
-      }
-
-      // Call onUploadComplete after everything is done
-      if (onUploadComplete) {
-        onUploadComplete(result)
-      }
     } catch (error) {
       console.error('Upload error:', error)
-
-      // 에러 상태로 업데이트
-      setUploads(prev => prev.map(u => {
-        if (newUploads.find(nu => nu.id === u.id)) {
-          return { ...u, status: 'error' as const }
-        }
-        return u
-      }))
-
-      setUploadProgress({
-        stage: 'error',
-        message: `업로드 오류: ${error?.message || error?.toString() || '알 수 없는 오류'}`
-      })
+      setUploads(prev => prev.map(u =>
+        validFiles.includes(u.file) ? { ...u, status: 'error', progress: 0 } : u
+      ))
     }
-  }, [acceptedFileTypes, maxFileSize, onFileUpload, backendUrl, walletInfo, resetUploadState])
+  }, [currentAccount, maxFileSize, acceptedFileTypes, dockerImageName, uploadToWalrusDirectly, resetUploadState])
+
+  const handleFileSelect = useCallback((event: React.ChangeEvent<HTMLInputElement>) => {
+    const files = event.target.files
+    if (!files || files.length === 0) return
+
+    handleFiles(Array.from(files), activeTab)
+  }, [activeTab, handleFiles])
+
+  const handleDrop = useCallback((event: React.DragEvent<HTMLDivElement>) => {
+    event.preventDefault()
+    setIsDragOver(false)
+
+    const files = Array.from(event.dataTransfer.files)
+    handleFiles(files, activeTab)
+  }, [activeTab, handleFiles])
+
+  const handleDragOver = useCallback((event: React.DragEvent<HTMLDivElement>) => {
+    event.preventDefault()
+    setIsDragOver(true)
+  }, [])
+
+  const handleDragLeave = useCallback((event: React.DragEvent<HTMLDivElement>) => {
+    event.preventDefault()
+    setIsDragOver(false)
+  }, [])
 
   const removeUpload = useCallback((id: string) => {
     setUploads(prev => prev.filter(u => u.id !== id))
   }, [])
-
-  const connectGitHub = useCallback(async () => {
-    if (!githubToken) return
-
-    setIsConnecting(true)
-    try {
-      // GitHub API를 통해 실제 저장소 목록 가져오기
-      const response = await fetch('https://api.github.com/user/repos', {
-        headers: {
-          'Authorization': `token ${githubToken}`,
-          'Accept': 'application/vnd.github.v3+json',
-        }
-      })
-
-      if (response.ok) {
-        const repos = await response.json()
-        setGithubRepos(repos.slice(0, 10)) // 최대 10개 저장소만 표시
-        setConnectionStatus('connected')
-      } else {
-        setConnectionStatus('error')
-      }
-    } catch (error) {
-      console.error('GitHub connection error:', error)
-      setConnectionStatus('error')
-    } finally {
-      setIsConnecting(false)
-    }
-  }, [githubToken])
-
-  const selectRepo = useCallback(async (repo: GitHubRepo) => {
-    setSelectedRepo(repo)
-
-    try {
-      if (!walletInfo?.authSignature) {
-        throw new Error('지갑 인증이 필요합니다.')
-      }
-
-      const response = await fetch(`${backendUrl}/api/project/from-github`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${walletInfo.authSignature}`,
-        },
-        body: JSON.stringify({
-          repo: repo.full_name,
-          ref: 'main',
-          installation_id: 1, // 임시 installation ID
-        }),
-      })
-
-      if (response.ok) {
-        const result = await response.json()
-        setUploadResponse(result)
-
-        if (onGitHubConnect) {
-          await onGitHubConnect(repo)
-        }
-      }
-    } catch (error) {
-      console.error('GitHub repo selection error:', error)
-    }
-  }, [onGitHubConnect, backendUrl, walletInfo])
 
   const formatFileSize = (bytes: number) => {
     if (bytes === 0) return '0 Bytes'
@@ -597,10 +528,10 @@ const ProjectUpload: React.FC<ProjectUploadProps> = ({
           className="text-center mb-8"
         >
           <h1 className="text-4xl md:text-5xl font-bold bg-gradient-to-r from-foreground to-foreground/70 bg-clip-text text-transparent mb-4">
-            DAAS 프로젝트 업로드
+            DAAS 업로드
           </h1>
           <p className="text-lg text-muted-foreground max-w-2xl mx-auto">
-            파일을 직접 업로드하거나 GitHub 저장소를 연결하여 블록체인에 안전하게 저장하세요
+            프로젝트 파일 또는 Docker 이미지를 블록체인에 안전하게 저장하세요
           </p>
           <div className="mt-4 flex items-center justify-center gap-2">
             <Badge variant="secondary" className="bg-primary/10 text-primary border-primary/20">
@@ -609,465 +540,318 @@ const ProjectUpload: React.FC<ProjectUploadProps> = ({
                 '연결되지 않음'
               }
             </Badge>
+            {walletInfo?.balance && (
+              <Badge variant="outline">잔액: {walletInfo.balance} SUI</Badge>
+            )}
           </div>
         </motion.div>
 
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.6, delay: 0.1 }}
-        >
-          <Card className="backdrop-blur-xl bg-card/80 border-border/50 shadow-2xl">
-            <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as 'upload' | 'github')} className="w-full">
-              <TabsList className="grid w-full grid-cols-2 mb-6 bg-muted/50">
-                <TabsTrigger value="upload" className="flex items-center gap-2">
-                  <Upload className="w-4 h-4" />
-                  파일 업로드
-                </TabsTrigger>
-                <TabsTrigger value="github" className="flex items-center gap-2">
-                  <Github className="w-4 h-4" />
-                  GitHub 연동
-                </TabsTrigger>
-              </TabsList>
+        <Card className="backdrop-blur-xl bg-background/50 border-primary/10">
+          <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as 'project' | 'docker')}>
+            <TabsList className="grid w-full grid-cols-2 mb-6">
+              <TabsTrigger value="project" className="data-[state=active]:bg-primary/10">
+                <Folder className="w-4 h-4 mr-2" />
+                프로젝트 업로드
+              </TabsTrigger>
+              <TabsTrigger value="docker" className="data-[state=active]:bg-primary/10">
+                <Package className="w-4 h-4 mr-2" />
+                Docker 이미지 업로드
+              </TabsTrigger>
+            </TabsList>
 
-              <TabsContent value="upload" className="space-y-6">
-                <motion.div
-                  className={`relative border-2 border-dashed rounded-xl p-8 md:p-12 transition-all duration-300 ${
-                    isDragOver
-                      ? 'border-primary bg-primary/5 scale-[1.02]'
-                      : 'border-border hover:border-primary/50 hover:bg-muted/20'
-                  }`}
+            <TabsContent value="project" className="space-y-4">
+              <div
+                onDrop={handleDrop}
+                onDragOver={handleDragOver}
+                onDragLeave={handleDragLeave}
+                className={`
+                  relative border-2 border-dashed rounded-lg p-8 text-center transition-all duration-200
+                  ${isDragOver
+                    ? 'border-primary bg-primary/5'
+                    : 'border-muted-foreground/20 hover:border-primary/50 hover:bg-muted/50'
+                  }
+                `}
+              >
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  multiple
+                  accept={acceptedFileTypes.join(',')}
+                  onChange={handleFileSelect}
+                  className="hidden"
+                />
+                <input
+                  ref={folderInputRef}
+                  type="file"
+                  webkitdirectory="true"
+                  multiple
+                  onChange={handleFolderSelect}
+                  className="hidden"
+                />
+
+                <Upload className="w-12 h-12 mx-auto mb-4 text-muted-foreground" />
+                <p className="text-lg font-medium mb-2">프로젝트 파일 업로드</p>
+                <p className="text-sm text-muted-foreground mb-4">
+                  파일을 드래그하거나 클릭하여 선택하세요
+                </p>
+                <p className="text-xs text-muted-foreground mb-4">
+                  지원 형식: .zip, .tar.gz, .tgz (최대 {formatFileSize(maxFileSize)})
+                </p>
+                <div className="flex gap-2 justify-center">
+                  <Button
+                    onClick={() => fileInputRef.current?.click()}
+                    variant="outline"
+                  >
+                    <File className="w-4 h-4 mr-2" />
+                    파일 선택
+                  </Button>
+                  <Button
+                    onClick={() => folderInputRef.current?.click()}
+                    variant="outline"
+                  >
+                    <Folder className="w-4 h-4 mr-2" />
+                    폴더 선택
+                  </Button>
+                </div>
+              </div>
+            </TabsContent>
+
+            <TabsContent value="docker" className="space-y-4">
+              <div className="space-y-4">
+                <div>
+                  <label className="text-sm font-medium mb-2 block">Docker 이미지 이름</label>
+                  <Input
+                    placeholder="예: myapp:latest"
+                    value={dockerImageName}
+                    onChange={(e) => setDockerImageName(e.target.value)}
+                    className="mb-4"
+                  />
+                </div>
+
+                <div className="bg-muted/50 rounded-lg p-4 mb-4">
+                  <h3 className="font-medium mb-2 flex items-center">
+                    <HardDrive className="w-4 h-4 mr-2" />
+                    Docker 이미지 준비 방법
+                  </h3>
+                  <ol className="text-sm text-muted-foreground space-y-1 list-decimal list-inside">
+                    <li>Docker 이미지 빌드: <code className="bg-background px-1 rounded">docker build -t myapp .</code></li>
+                    <li>이미지를 tar 파일로 저장: <code className="bg-background px-1 rounded">docker save myapp &gt; myapp.tar</code></li>
+                    <li>생성된 tar 파일을 여기에 업로드</li>
+                  </ol>
+                </div>
+
+                <div
+                  onDrop={handleDrop}
                   onDragOver={handleDragOver}
                   onDragLeave={handleDragLeave}
-                  onDrop={handleDrop}
-                  whileHover={{ scale: 1.01 }}
-                  whileTap={{ scale: 0.99 }}
+                  className={`
+                    relative border-2 border-dashed rounded-lg p-8 text-center transition-all duration-200
+                    ${isDragOver
+                      ? 'border-primary bg-primary/5'
+                      : 'border-muted-foreground/20 hover:border-primary/50 hover:bg-muted/50'
+                    }
+                  `}
                 >
                   <input
-                    ref={fileInputRef}
+                    ref={dockerFileInputRef}
                     type="file"
-                    multiple
-                    accept={acceptedFileTypes.join(',')}
-                    onChange={handleFileSelect}
-                    className="hidden"
-                  />
-                  <input
-                    ref={folderInputRef}
-                    type="file"
-                    // @ts-ignore
-                    webkitdirectory="true"
-                    multiple
+                    accept=".tar,.docker,.dockerimage"
                     onChange={handleFileSelect}
                     className="hidden"
                   />
 
-                  <div className="text-center">
-                    <motion.div
-                      animate={{
-                        scale: isDragOver ? 1.1 : 1,
-                        rotate: isDragOver ? 5 : 0
-                      }}
-                      transition={{ type: "spring", stiffness: 300, damping: 20 }}
-                      className="w-16 h-16 mx-auto mb-4 rounded-full bg-primary/10 flex items-center justify-center"
-                    >
-                      <Upload className="w-8 h-8 text-primary" />
-                    </motion.div>
+                  <Package className="w-12 h-12 mx-auto mb-4 text-muted-foreground" />
+                  <p className="text-lg font-medium mb-2">Docker 이미지 파일 업로드</p>
+                  <p className="text-sm text-muted-foreground mb-4">
+                    tar 파일을 드래그하거나 클릭하여 선택하세요
+                  </p>
+                  <p className="text-xs text-muted-foreground mb-4">
+                    지원 형식: .tar (최대 {formatFileSize(maxFileSize)})
+                  </p>
+                  <Button
+                    onClick={() => dockerFileInputRef.current?.click()}
+                    variant="outline"
+                    disabled={!dockerImageName}
+                  >
+                    <Package className="w-4 h-4 mr-2" />
+                    Docker 이미지 선택
+                  </Button>
+                </div>
+              </div>
+            </TabsContent>
+          </Tabs>
+        </Card>
 
-                    <h3 className="text-xl font-semibold mb-2">
-                      {isDragOver ? '파일/폴더를 여기에 놓으세요' : '파일 또는 폴더를 업로드'}
-                    </h3>
-                    <div className="flex gap-2 justify-center mb-4">
-                      <Button
-                        variant="link"
-                        className="p-2 h-auto font-medium text-primary"
-                        onClick={handleSelectFiles}
-                      >
-                        📄 파일 선택
-                      </Button>
-                      <span className="text-muted-foreground">또는</span>
-                      <Button
-                        variant="link"
-                        className="p-2 h-auto font-medium text-primary"
-                        onClick={handleSelectFolder}
-                      >
-                        📁 폴더 선택
-                      </Button>
-                    </div>
+        {/* 선택된 파일 트리 표시 */}
+        {fileTree.length > 0 && (
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="mt-6"
+          >
+            <Card className="p-6 backdrop-blur-xl bg-background/50 border-primary/10">
+              <div className="space-y-4">
+                <div className="flex items-center justify-between">
+                  <h3 className="text-lg font-semibold">선택된 파일</h3>
+                  <Badge variant="secondary">
+                    {selectedFiles.length}개 파일 ({formatFileSize(selectedFiles.reduce((sum, f) => sum + f.size, 0))})
+                  </Badge>
+                </div>
+                <div className="max-h-96 overflow-y-auto border rounded-lg p-2">
+                  {renderFileTree(fileTree)}
+                </div>
+                <div className="flex justify-end gap-2">
+                  <Button
+                    variant="outline"
+                    onClick={() => {
+                      setFileTree([])
+                      setSelectedFiles([])
+                    }}
+                  >
+                    <X className="w-4 h-4 mr-2" />
+                    취소
+                  </Button>
+                  <Button
+                    onClick={handleUploadSelectedFiles}
+                    disabled={selectedFiles.length === 0}
+                  >
+                    <Upload className="w-4 h-4 mr-2" />
+                    업로드 시작
+                  </Button>
+                </div>
+              </div>
+            </Card>
+          </motion.div>
+        )}
 
-                    <div className="flex flex-wrap gap-2 justify-center">
-                      {acceptedFileTypes.slice(0, 6).map(type => (
-                        <Badge key={type} variant="secondary" className="text-xs">
-                          {type}
-                        </Badge>
-                      ))}
-                      {acceptedFileTypes.length > 6 && (
-                        <Badge variant="secondary" className="text-xs">
-                          +{acceptedFileTypes.length - 6}개 더
-                        </Badge>
-                      )}
-                    </div>
+        {/* 업로드 상태 표시 */}
+        {uploadProgress.stage !== 'idle' && (
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="mt-6"
+          >
+            <Card className="p-6 backdrop-blur-xl bg-background/50 border-primary/10">
+              <div className="space-y-4">
+                <div className="flex items-center justify-between">
+                  <h3 className="text-lg font-semibold">업로드 진행 상황</h3>
+                  {uploadProgress.stage === 'completed' && (
+                    <CheckCircle2 className="w-5 h-5 text-green-500" />
+                  )}
+                  {uploadProgress.stage === 'error' && (
+                    <XCircle className="w-5 h-5 text-red-500" />
+                  )}
+                  {['preparing', 'processing', 'uploading'].includes(uploadProgress.stage) && (
+                    <Loader className="w-5 h-5 animate-spin text-primary" />
+                  )}
+                </div>
 
-                    <p className="text-sm text-muted-foreground mt-3">
-                      최대 파일 크기: {formatFileSize(maxFileSize)}
+                <div className="space-y-2">
+                  <p className="text-sm text-muted-foreground">{uploadProgress.message}</p>
+                  {uploadProgress.percentage && (
+                    <Progress value={uploadProgress.percentage} className="h-2" />
+                  )}
+                </div>
+
+                {uploadProgress.blobId && (
+                  <div className="pt-2 border-t">
+                    <p className="text-xs text-muted-foreground">
+                      Blob ID: <code className="bg-muted px-1 rounded">{uploadProgress.blobId}</code>
                     </p>
                   </div>
-                </motion.div>
-
-                <AnimatePresence>
-                  {uploads.length > 0 && (
-                    <motion.div
-                      initial={{ opacity: 0, height: 0 }}
-                      animate={{ opacity: 1, height: 'auto' }}
-                      exit={{ opacity: 0, height: 0 }}
-                      className="space-y-3"
-                    >
-                      <h4 className="font-medium text-sm text-muted-foreground">업로드된 파일</h4>
-{(() => {
-                        const fileTree = buildFileTree(uploads)
-                        return renderFileTreeNode(fileTree)
-                      })()}
-                    </motion.div>
-                  )}
-                </AnimatePresence>
-
-                {/* 업로드 진행 상황 표시 */}
-                <AnimatePresence>
-                  {showUploadDetails && uploadProgress.stage !== 'idle' && (
-                    <motion.div
-                      initial={{ opacity: 0, y: 20 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      exit={{ opacity: 0, y: -20 }}
-                      className={`p-4 rounded-lg border ${
-                        uploadProgress.stage === 'error'
-                          ? 'bg-red-500/10 border-red-500/20'
-                          : uploadProgress.stage === 'completed'
-                          ? 'bg-green-500/10 border-green-500/20'
-                          : 'bg-blue-500/10 border-blue-500/20'
-                      }`}
-                    >
-                      <div className="flex items-center gap-3 mb-3">
-                        {uploadProgress.stage === 'preparing' && (
-                          <Loader className="w-5 h-5 text-blue-500 animate-spin" />
-                        )}
-                        {uploadProgress.stage === 'signing' && (
-                          <Clock className="w-5 h-5 text-blue-500 animate-pulse" />
-                        )}
-                        {uploadProgress.stage === 'uploading' && (
-                          <Loader className="w-5 h-5 text-blue-500 animate-spin" />
-                        )}
-                        {uploadProgress.stage === 'completed' && (
-                          <CheckCircle2 className="w-5 h-5 text-green-500" />
-                        )}
-                        {uploadProgress.stage === 'error' && (
-                          <XCircle className="w-5 h-5 text-red-500" />
-                        )}
-
-                        <div className="flex-1">
-                          <h4 className={`font-medium ${
-                            uploadProgress.stage === 'error'
-                              ? 'text-red-600'
-                              : uploadProgress.stage === 'completed'
-                              ? 'text-green-600'
-                              : 'text-blue-600'
-                          }`}>
-                            {uploadProgress.stage === 'preparing' && '업로드 준비 중'}
-                            {uploadProgress.stage === 'signing' && '트랜잭션 서명 중'}
-                            {uploadProgress.stage === 'uploading' && 'Walrus 업로드 중'}
-                            {uploadProgress.stage === 'completed' && '업로드 완료!'}
-                            {uploadProgress.stage === 'error' && '업로드 실패'}
-                          </h4>
-                          <p className={`text-sm ${
-                            uploadProgress.stage === 'error'
-                              ? 'text-red-600'
-                              : uploadProgress.stage === 'completed'
-                              ? 'text-green-600'
-                              : 'text-blue-600'
-                          }`}>
-                            {uploadProgress.message}
-                          </p>
-                        </div>
-                      </div>
-
-                      {/* 트랜잭션 해시 표시 */}
-                      {uploadProgress.txHash && (
-                        <div className="text-sm space-y-2">
-                          <div className="flex items-center gap-2">
-                            <span className="text-muted-foreground">트랜잭션 해시:</span>
-                            <code className="bg-black/10 px-2 py-1 rounded text-xs">
-                              {uploadProgress.txHash.slice(0, 8)}...{uploadProgress.txHash.slice(-8)}
-                            </code>
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              className="w-4 h-4 p-0"
-                              onClick={() => {
-                                const explorerUrl = `https://explorer.sui.io/txblock/${uploadProgress.txHash}?network=devnet`
-                                window.open(explorerUrl, '_blank')
-                              }}
-                            >
-                              <ExternalLink className="w-3 h-3" />
-                            </Button>
-                          </div>
-                        </div>
-                      )}
-
-                      {/* Blob ID 표시 */}
-                      {uploadProgress.blobId && (
-                        <div className="text-sm space-y-2 mt-2">
-                          <div className="flex items-center gap-2">
-                            <span className="text-muted-foreground">Walrus Blob ID:</span>
-                            <code className="bg-black/10 px-2 py-1 rounded text-xs">
-                              {uploadProgress.blobId.slice(0, 12)}...{uploadProgress.blobId.slice(-12)}
-                            </code>
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              className="w-4 h-4 p-0"
-                              onClick={() => {
-                                navigator.clipboard.writeText(uploadProgress.blobId!)
-                              }}
-                            >
-                              <File className="w-3 h-3" />
-                            </Button>
-                          </div>
-                        </div>
-                      )}
-
-                      {/* 진행 바 */}
-                      {(uploadProgress.stage === 'preparing' || uploadProgress.stage === 'signing' || uploadProgress.stage === 'uploading') && (
-                        <div className="mt-3">
-                          <Progress
-                            value={
-                              uploadProgress.stage === 'preparing' ? 25 :
-                              uploadProgress.stage === 'signing' ? 50 :
-                              uploadProgress.stage === 'uploading' ? 75 : 100
-                            }
-                            className="h-2"
-                          />
-                        </div>
-                      )}
-
-                      {/* 에러 시 재시도 버튼 */}
-                      {uploadProgress.stage === 'error' && (
-                        <div className="mt-3 flex gap-2">
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={resetUploadState}
-                            className="text-red-600 border-red-300 hover:bg-red-50"
-                          >
-                            새 업로드 시작
-                          </Button>
-                        </div>
-                      )}
-
-                      {/* 완료 시 새 업로드 버튼 */}
-                      {uploadProgress.stage === 'completed' && (
-                        <div className="mt-3 flex gap-2">
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={resetUploadState}
-                            className="text-green-600 border-green-300 hover:bg-green-50"
-                          >
-                            새 프로젝트 업로드
-                          </Button>
-                        </div>
-                      )}
-                    </motion.div>
-                  )}
-                </AnimatePresence>
-
-                {uploadResponse && uploadProgress.stage === 'completed' && (
-                  <motion.div
-                    initial={{ opacity: 0, y: 20 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    className="p-4 rounded-lg bg-green-500/10 border border-green-500/20"
-                  >
-                    <h4 className="font-medium text-green-600 mb-2">업로드 성공!</h4>
-                    <div className="text-sm text-green-600 space-y-1">
-                      <p>Walrus Blob ID: <code className="bg-green-500/20 px-1 rounded">{uploadResponse.cid_code}</code></p>
-                      <p>파일 크기: {formatFileSize(uploadResponse.size_code)}</p>
-                      <p>파일 수: {uploadResponse.files_env?.length || 0}개</p>
-                    </div>
-                  </motion.div>
                 )}
-              </TabsContent>
+              </div>
+            </Card>
+          </motion.div>
+        )}
 
-              <TabsContent value="github" className="space-y-6">
-                {connectionStatus === 'idle' && (
-                  <motion.div
-                    initial={{ opacity: 0, y: 20 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    className="text-center space-y-6"
-                  >
-                    <div className="w-16 h-16 mx-auto rounded-full bg-primary/10 flex items-center justify-center">
-                      <Github className="w-8 h-8 text-primary" />
-                    </div>
-
-                    <div>
-                      <h3 className="text-xl font-semibold mb-2">GitHub에 연결</h3>
-                      <p className="text-muted-foreground">
-                        GitHub Personal Access Token을 입력하여 저장소를 가져오세요
-                      </p>
-                    </div>
-
-                    <div className="max-w-md mx-auto space-y-4">
-                      <Input
-                        type="password"
-                        placeholder="GitHub Personal Access Token"
-                        value={githubToken}
-                        onChange={(e) => setGithubToken(e.target.value)}
-                        className="bg-background/50"
-                      />
-                      <Button
-                        onClick={connectGitHub}
-                        disabled={!githubToken || isConnecting}
-                        className="w-full"
-                      >
-                        {isConnecting ? (
-                          <motion.div
-                            animate={{ rotate: 360 }}
-                            transition={{ duration: 1, repeat: Infinity, ease: "linear" }}
-                            className="w-4 h-4 border-2 border-current border-t-transparent rounded-full"
-                          />
-                        ) : (
-                          'GitHub 연결'
-                        )}
-                      </Button>
-                    </div>
-                  </motion.div>
-                )}
-
-                {connectionStatus === 'connected' && (
-                  <motion.div
-                    initial={{ opacity: 0, y: 20 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    className="space-y-4"
-                  >
-                    <div className="flex items-center justify-between">
-                      <h4 className="font-medium">저장소 목록</h4>
-                      <Badge variant="secondary" className="bg-green-500/10 text-green-600 border-green-500/20">
-                        연결됨
-                      </Badge>
-                    </div>
-
-                    <div className="grid gap-3">
-                      {githubRepos.map(repo => (
-                        <motion.div
-                          key={repo.id}
-                          initial={{ opacity: 0, x: -20 }}
-                          animate={{ opacity: 1, x: 0 }}
-                          whileHover={{ scale: 1.02 }}
-                          whileTap={{ scale: 0.98 }}
-                          className={`p-4 rounded-lg border cursor-pointer transition-all ${
-                            selectedRepo?.id === repo.id
-                              ? 'border-primary bg-primary/5'
-                              : 'border-border hover:border-primary/50 hover:bg-muted/20'
-                          }`}
-                          onClick={() => selectRepo(repo)}
-                        >
-                          <div className="flex items-start justify-between">
-                            <div className="flex items-start gap-3">
-                              <div className="w-8 h-8 rounded bg-primary/10 flex items-center justify-center flex-shrink-0 mt-1">
-                                <Folder className="w-4 h-4 text-primary" />
-                              </div>
-
-                              <div className="flex-1 min-w-0">
-                                <h5 className="font-medium text-sm">{repo.name}</h5>
-                                <p className="text-xs text-muted-foreground mt-1 line-clamp-2">
-                                  {repo.description || '설명이 없습니다'}
-                                </p>
-
-                                <div className="flex items-center gap-4 mt-2">
-                                  {repo.language && (
-                                    <div className="flex items-center gap-1">
-                                      <div className="w-2 h-2 rounded-full bg-primary"></div>
-                                      <span className="text-xs text-muted-foreground">{repo.language}</span>
-                                    </div>
-                                  )}
-                                  <div className="flex items-center gap-1">
-                                    <Star className="w-3 h-3 text-muted-foreground" />
-                                    <span className="text-xs text-muted-foreground">{repo.stargazers_count}</span>
-                                  </div>
-                                  <div className="flex items-center gap-1">
-                                    <GitBranch className="w-3 h-3 text-muted-foreground" />
-                                    <span className="text-xs text-muted-foreground">main</span>
-                                  </div>
-                                </div>
-                              </div>
-                            </div>
-
-                            {selectedRepo?.id === repo.id && (
-                              <motion.div
-                                initial={{ scale: 0 }}
-                                animate={{ scale: 1 }}
-                                className="w-5 h-5 rounded-full bg-primary flex items-center justify-center"
-                              >
-                                <Check className="w-3 h-3 text-primary-foreground" />
-                              </motion.div>
-                            )}
-                          </div>
-                        </motion.div>
-                      ))}
-                    </div>
-
-                    {selectedRepo && (
-                      <motion.div
-                        initial={{ opacity: 0, y: 10 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        className="p-4 rounded-lg bg-primary/5 border border-primary/20"
-                      >
-                        <p className="text-sm text-primary font-medium">
-                          선택됨: {selectedRepo.full_name}
-                        </p>
-                      </motion.div>
-                    )}
-                  </motion.div>
-                )}
-
-                {connectionStatus === 'error' && (
-                  <motion.div
-                    initial={{ opacity: 0, y: 20 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    className="text-center space-y-4"
-                  >
-                    <div className="w-16 h-16 mx-auto rounded-full bg-red-500/10 flex items-center justify-center">
-                      <AlertCircle className="w-8 h-8 text-red-500" />
-                    </div>
-                    <div>
-                      <h3 className="text-xl font-semibold mb-2">연결 실패</h3>
-                      <p className="text-muted-foreground">
-                        GitHub에 연결할 수 없습니다. 토큰을 확인하고 다시 시도해주세요.
-                      </p>
-                    </div>
-                    <Button
-                      variant="outline"
-                      onClick={() => setConnectionStatus('idle')}
-                    >
-                      다시 시도
-                    </Button>
-                  </motion.div>
-                )}
-
+        {/* 업로드 완료 후 파일 트리 구조 표시 */}
+        {uploads.length > 0 && uploadProgress.stage === 'completed' && fileTree.length > 0 && (
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="mt-6"
+          >
+            <Card className="p-6 backdrop-blur-xl bg-background/50 border-primary/10">
+              <div className="space-y-4">
+                <div className="flex items-center justify-between">
+                  <h3 className="text-lg font-semibold flex items-center gap-2">
+                    <CheckCircle2 className="w-5 h-5 text-green-500" />
+                    업로드 완료된 파일
+                  </h3>
+                  <Badge variant="default" className="bg-green-500/10 text-green-500 border-green-500/20">
+                    {selectedFiles.length}개 파일 업로드 완료
+                  </Badge>
+                </div>
+                <div className="max-h-96 overflow-y-auto border rounded-lg p-2 bg-muted/20">
+                  {renderFileTree(fileTree)}
+                </div>
                 {uploadResponse && (
-                  <motion.div
-                    initial={{ opacity: 0, y: 20 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    className="p-4 rounded-lg bg-green-500/10 border border-green-500/20"
-                  >
-                    <h4 className="font-medium text-green-600 mb-2">GitHub 저장소 업로드 성공!</h4>
-                    <div className="text-sm text-green-600 space-y-1">
-                      <p>Walrus Blob ID: <code className="bg-green-500/20 px-1 rounded">{uploadResponse.cid_code}</code></p>
-                      <p>파일 크기: {formatFileSize(uploadResponse.size_code)}</p>
-                      <p>파일 수: {uploadResponse.files_env?.length || 0}개</p>
-                    </div>
-                  </motion.div>
+                  <div className="pt-2 border-t space-y-1">
+                    <p className="text-xs text-muted-foreground">
+                      코드 Blob ID: <code className="bg-muted px-1 rounded">{uploadResponse.codeBlobId}</code>
+                    </p>
+                    {uploadResponse.dockerBlobId && (
+                      <p className="text-xs text-muted-foreground">
+                        Docker Blob ID: <code className="bg-muted px-1 rounded">{uploadResponse.dockerBlobId}</code>
+                      </p>
+                    )}
+                  </div>
                 )}
-              </TabsContent>
-            </Tabs>
-          </Card>
-        </motion.div>
+              </div>
+            </Card>
+          </motion.div>
+        )}
+
+        {/* 업로드된 개별 파일 목록 (파일 트리가 없을 때만 표시) */}
+        {uploads.length > 0 && uploadProgress.stage === 'completed' && fileTree.length === 0 && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            className="mt-6 space-y-2"
+          >
+            {uploads.map((upload) => (
+              <Card key={upload.id} className="p-4 backdrop-blur-xl bg-background/50 border-primary/10">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    {upload.type === 'docker' ? (
+                      <Package className="w-5 h-5 text-primary" />
+                    ) : (
+                      <FileText className="w-5 h-5 text-primary" />
+                    )}
+                    <div>
+                      <p className="font-medium">{upload.file.name}</p>
+                      <p className="text-xs text-muted-foreground">
+                        {formatFileSize(upload.file.size)} • {upload.type === 'docker' ? 'Docker 이미지' : '프로젝트 파일'}
+                      </p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    {upload.status === 'completed' && (
+                      <CheckCircle2 className="w-5 h-5 text-green-500" />
+                    )}
+                    {upload.status === 'error' && (
+                      <XCircle className="w-5 h-5 text-red-500" />
+                    )}
+                    {upload.status === 'uploading' && (
+                      <Loader className="w-5 h-5 animate-spin text-primary" />
+                    )}
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => removeUpload(upload.id)}
+                    >
+                      <X className="w-4 h-4" />
+                    </Button>
+                  </div>
+                </div>
+                {upload.status === 'uploading' && upload.progress > 0 && (
+                  <Progress value={upload.progress} className="h-1 mt-2" />
+                )}
+              </Card>
+            ))}
+          </motion.div>
+        )}
       </div>
     </div>
   )
