@@ -25,7 +25,7 @@ import { Badge } from '@/components/ui/badge'
 import { Progress } from '@/components/ui/progress'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { WalletInfo } from '@/types'
-import { mockNodeRegistryService } from '@/services/mockNodeService'
+import { nodeRegistryService } from '@/services/nodeRegistry'
 import { NodeMetadata, NODE_STATUS } from '@/contracts/types'
 
 interface ResourceConfig {
@@ -79,10 +79,10 @@ const NodeOperationDashboard: React.FC<NodeOperationDashboardProps> = ({
 
       try {
         setIsLoading(true)
-        const exists = await mockNodeRegistryService.nodeExists(walletInfo.address)
+        const exists = await nodeRegistryService.nodeExists(walletInfo.address)
 
         if (exists) {
-          const metadata = await mockNodeRegistryService.getNodeMetadata(walletInfo.address)
+          const metadata = await nodeRegistryService.getNodeMetadata(walletInfo.address)
           setNodeMetadata(metadata)
         } else {
           setNodeMetadata(null)
@@ -135,6 +135,7 @@ const NodeOperationDashboard: React.FC<NodeOperationDashboardProps> = ({
         return '알 수 없음'
     }
   }
+
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-background via-background to-muted/20 p-6">
@@ -309,10 +310,9 @@ const NodeOperationDashboard: React.FC<NodeOperationDashboardProps> = ({
         {/* Main Content - 노드가 등록된 경우만 표시 */}
         {nodeMetadata && (
           <Tabs defaultValue="overview" className="space-y-6">
-            <TabsList className="grid w-full grid-cols-4">
+            <TabsList className="grid w-full grid-cols-3">
               <TabsTrigger value="overview">개요</TabsTrigger>
               <TabsTrigger value="node">노드 관리</TabsTrigger>
-              <TabsTrigger value="earnings">수익 분석</TabsTrigger>
               <TabsTrigger value="monitoring">모니터링</TabsTrigger>
             </TabsList>
 
@@ -330,29 +330,25 @@ const NodeOperationDashboard: React.FC<NodeOperationDashboardProps> = ({
                       <div className="grid grid-cols-2 gap-4 text-sm">
                         <div>
                           <span className="text-muted-foreground">CPU:</span>
-                          <span className="font-medium ml-2">{nodeInfo.cpu} 코어</span>
+                          <span className="font-medium ml-2">{nodeMetadata.cpu_cores} 코어</span>
                         </div>
                         <div>
                           <span className="text-muted-foreground">메모리:</span>
-                          <span className="font-medium ml-2">{nodeInfo.memory} GB</span>
+                          <span className="font-medium ml-2">{nodeMetadata.memory_gb} GB</span>
                         </div>
                         <div>
                           <span className="text-muted-foreground">스토리지:</span>
-                          <span className="font-medium ml-2">{nodeInfo.storage} GB</span>
+                          <span className="font-medium ml-2">{nodeMetadata.storage_gb} GB</span>
                         </div>
                         <div>
                           <span className="text-muted-foreground">대역폭:</span>
-                          <span className="font-medium ml-2">{nodeInfo.bandwidth} Mbps</span>
+                          <span className="font-medium ml-2">{nodeMetadata.bandwidth_mbps} Mbps</span>
                         </div>
                       </div>
                       <div className="pt-2 border-t">
                         <div className="flex justify-between">
                           <span className="text-muted-foreground">지역:</span>
-                          <span className="font-semibold">{nodeInfo.region}</span>
-                        </div>
-                        <div className="flex justify-between mt-2">
-                          <span className="text-muted-foreground">시간당 가격:</span>
-                          <span className="font-semibold text-green-600">{nodeInfo.pricePerHour.toFixed(2)} SUI</span>
+                          <span className="font-semibold">{nodeMetadata.region}</span>
                         </div>
                       </div>
                     </div>
@@ -366,33 +362,30 @@ const NodeOperationDashboard: React.FC<NodeOperationDashboardProps> = ({
                   transition={{ delay: 0.1 }}
                 >
                   <Card className="p-6">
-                    <h3 className="text-lg font-semibold mb-4">성능 지표</h3>
+                    <h3 className="text-lg font-semibold mb-4">노드 정보</h3>
                     <div className="space-y-4">
-                      <div className="flex items-center justify-between">
-                        <span className="text-sm">평판 점수</span>
-                        <div className="flex items-center gap-2">
-                          <span className="font-semibold">{nodeInfo.reputation}</span>
-                          <span className="text-yellow-500">★</span>
-                        </div>
-                      </div>
-                      <div className="flex items-center justify-between">
-                        <span className="text-sm">완료된 작업</span>
-                        <span className="font-semibold">{nodeInfo.completedJobs}</span>
-                      </div>
                       <div className="flex items-center justify-between">
                         <span className="text-sm">노드 상태</span>
                         <div className="flex items-center gap-2">
-                          {nodeInfo.status === 'active' ? (
+                          {nodeMetadata.status === NODE_STATUS.ACTIVE ? (
                             <CheckCircle className="w-4 h-4 text-green-500" />
                           ) : (
                             <AlertTriangle className="w-4 h-4 text-yellow-500" />
                           )}
-                          <span className="text-sm">{nodeInfo.status === 'active' ? '정상' : '비활성'}</span>
+                          <span className="text-sm">{getStatusText(nodeMetadata.status)}</span>
                         </div>
                       </div>
                       <div className="flex items-center justify-between">
                         <span className="text-sm">등록일</span>
-                        <span className="font-semibold">{nodeInfo.registeredAt.toLocaleDateString()}</span>
+                        <span className="font-semibold">{new Date(nodeMetadata.registered_at).toLocaleDateString()}</span>
+                      </div>
+                      <div className="flex items-center justify-between">
+                        <span className="text-sm">마지막 업데이트</span>
+                        <span className="font-semibold">{new Date(nodeMetadata.last_updated).toLocaleDateString()}</span>
+                      </div>
+                      <div className="flex items-center justify-between">
+                        <span className="text-sm">제공자 주소</span>
+                        <span className="font-semibold text-xs">{nodeMetadata.provider_address.slice(0, 12)}...</span>
                       </div>
                     </div>
                   </Card>
@@ -409,7 +402,7 @@ const NodeOperationDashboard: React.FC<NodeOperationDashboardProps> = ({
                 <Card className="p-6">
                   <div className="flex items-center justify-between mb-6">
                     <h3 className="text-xl font-semibold">노드 관리</h3>
-                    {getStatusBadge(nodeInfo.status)}
+                    {getStatusBadge(nodeMetadata.status)}
                   </div>
 
                   <div className="border rounded-lg p-6">
@@ -417,15 +410,15 @@ const NodeOperationDashboard: React.FC<NodeOperationDashboardProps> = ({
                       <div>
                         <h4 className="font-semibold text-lg">My Node</h4>
                         <p className="text-sm text-muted-foreground">
-                          등록일: {nodeInfo.registeredAt.toLocaleDateString()}
+                          등록일: {new Date(nodeMetadata.registered_at).toLocaleDateString()}
                         </p>
                       </div>
                       <div className="text-right">
-                        <p className="font-semibold text-green-600 text-lg">
-                          {nodeInfo.totalEarnings.toFixed(2)} SUI
+                        <p className="font-semibold text-blue-600 text-lg">
+                          {getStatusText(nodeMetadata.status)}
                         </p>
                         <p className="text-xs text-muted-foreground">
-                          총 수익
+                          노드 상태
                         </p>
                       </div>
                     </div>
@@ -433,43 +426,43 @@ const NodeOperationDashboard: React.FC<NodeOperationDashboardProps> = ({
                     <div className="grid grid-cols-2 md:grid-cols-4 gap-6 mb-6">
                       <div>
                         <span className="text-muted-foreground text-sm">CPU:</span>
-                        <p className="font-medium text-lg">{nodeInfo.cpu} 코어</p>
+                        <p className="font-medium text-lg">{nodeMetadata.cpu_cores} 코어</p>
                       </div>
                       <div>
                         <span className="text-muted-foreground text-sm">메모리:</span>
-                        <p className="font-medium text-lg">{nodeInfo.memory} GB</p>
+                        <p className="font-medium text-lg">{nodeMetadata.memory_gb} GB</p>
                       </div>
                       <div>
                         <span className="text-muted-foreground text-sm">스토리지:</span>
-                        <p className="font-medium text-lg">{nodeInfo.storage} GB</p>
+                        <p className="font-medium text-lg">{nodeMetadata.storage_gb} GB</p>
                       </div>
                       <div>
                         <span className="text-muted-foreground text-sm">대역폭:</span>
-                        <p className="font-medium text-lg">{nodeInfo.bandwidth} Mbps</p>
+                        <p className="font-medium text-lg">{nodeMetadata.bandwidth_mbps} Mbps</p>
                       </div>
                     </div>
 
                     <div className="pt-4 border-t grid grid-cols-2 md:grid-cols-4 gap-6 mb-6">
                       <div>
                         <span className="text-muted-foreground text-sm">지역:</span>
-                        <p className="font-medium">{nodeInfo.region}</p>
+                        <p className="font-medium">{nodeMetadata.region}</p>
                       </div>
                       <div>
-                        <span className="text-muted-foreground text-sm">시간당 가격:</span>
-                        <p className="font-medium text-green-600">{nodeInfo.pricePerHour.toFixed(2)} SUI</p>
+                        <span className="text-muted-foreground text-sm">등록일:</span>
+                        <p className="font-medium">{new Date(nodeMetadata.registered_at).toLocaleDateString()}</p>
                       </div>
                       <div>
-                        <span className="text-muted-foreground text-sm">완료된 작업:</span>
-                        <p className="font-medium">{nodeInfo.completedJobs}개</p>
+                        <span className="text-muted-foreground text-sm">마지막 업데이트:</span>
+                        <p className="font-medium">{new Date(nodeMetadata.last_updated).toLocaleDateString()}</p>
                       </div>
                       <div>
-                        <span className="text-muted-foreground text-sm">가동률:</span>
-                        <p className="font-medium">{nodeInfo.uptime.toFixed(1)}%</p>
+                        <span className="text-muted-foreground text-sm">제공자 주소:</span>
+                        <p className="font-medium text-xs">{nodeMetadata.provider_address.slice(0, 8)}...</p>
                       </div>
                     </div>
 
                     <div className="flex gap-3">
-                      {nodeInfo.status === 'active' ? (
+                      {nodeMetadata.status === 'active' ? (
                         <Button variant="outline">
                           <Pause className="w-4 h-4 mr-2" />
                           노드 일시정지
@@ -493,65 +486,6 @@ const NodeOperationDashboard: React.FC<NodeOperationDashboardProps> = ({
               </motion.div>
             </TabsContent>
 
-          {/* 수익 분석 탭 */}
-          <TabsContent value="earnings" className="space-y-6">
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-              <motion.div
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-              >
-                <Card className="p-6">
-                  <h3 className="text-xl font-semibold mb-4">최근 7일 수익</h3>
-                  <div className="space-y-3">
-                    {recentEarnings.map((earning, index) => (
-                      <div key={earning.date} className="flex items-center justify-between">
-                        <span className="text-sm text-muted-foreground">{earning.date}</span>
-                        <span className="font-semibold text-green-600">
-                          {earning.amount.toFixed(2)} SUI
-                        </span>
-                      </div>
-                    ))}
-                  </div>
-                  <div className="mt-6 pt-4 border-t">
-                    <div className="flex items-center justify-between">
-                      <span className="font-semibold">총합</span>
-                      <span className="text-lg font-bold text-green-600">
-                        {recentEarnings.reduce((sum, e) => sum + e.amount, 0).toFixed(2)} SUI
-                      </span>
-                    </div>
-                  </div>
-                </Card>
-              </motion.div>
-
-              <motion.div
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: 0.1 }}
-              >
-                <Card className="p-6">
-                  <h3 className="text-xl font-semibold mb-4">수익 통계</h3>
-                  <div className="space-y-4">
-                    <div className="flex justify-between">
-                      <span className="text-sm text-muted-foreground">평균 일일 수익</span>
-                      <span className="font-semibold">12.85 SUI</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-sm text-muted-foreground">최고 일일 수익</span>
-                      <span className="font-semibold">18.91 SUI</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-sm text-muted-foreground">작업당 평균 수익</span>
-                      <span className="font-semibold">0.15 SUI</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-sm text-muted-foreground">효율성 점수</span>
-                      <span className="font-semibold text-green-600">92%</span>
-                    </div>
-                  </div>
-                </Card>
-              </motion.div>
-            </div>
-          </TabsContent>
 
           {/* 모니터링 탭 */}
           <TabsContent value="monitoring" className="space-y-6">

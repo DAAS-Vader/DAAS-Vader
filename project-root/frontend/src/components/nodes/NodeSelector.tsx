@@ -23,7 +23,7 @@ import { Badge } from '@/components/ui/badge'
 import { Progress } from '@/components/ui/progress'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { WorkerNode, NodeFilter } from '@/types'
-import { mockNodeRegistryService } from '@/services/mockNodeService'
+import { nodeRegistryService } from '@/services/nodeRegistry'
 import { NodeMetadata, NODE_STATUS } from '@/contracts/types'
 
 interface NodeSelectorProps {
@@ -57,7 +57,7 @@ const NodeSelector: React.FC<NodeSelectorProps> = ({
     const loadNodes = async () => {
       try {
         setIsLoading(true)
-        const nodeMetadataList = await mockNodeRegistryService.getAllNodes()
+        const nodeMetadataList = await nodeRegistryService.getAllNodes()
 
         // NodeMetadata를 WorkerNode 형식으로 변환
         const workerNodes: WorkerNode[] = nodeMetadataList
