@@ -16,7 +16,7 @@ import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { WalletInfo } from '@/types'
-import { useWallet } from '@suiet/wallet-kit'
+import { useCurrentAccount, useConnectWallet, useDisconnectWallet, useSignPersonalMessage, useWallets } from '@mysten/dapp-kit'
 
 interface WalletConnectorProps {
   onConnect: (wallet: WalletInfo) => void
@@ -42,34 +42,37 @@ const WalletConnector: React.FC<WalletConnectorProps> = ({
   const [copiedAddress, setCopiedAddress] = useState(false)
   const [isDisconnecting, setIsDisconnecting] = useState(false)
 
-  // Use Suiet wallet hook for real wallet integration
-  const {
-    wallet,
-    connected,
-    connecting,
-    select,
-    disconnect,
-    signPersonalMessage,
-    account
-  } = useWallet()
+  // Use Mysten dapp-kit hooks for real wallet integration
+  const currentAccount = useCurrentAccount()
+  const { mutate: connect } = useConnectWallet()
+  const { mutate: disconnect } = useDisconnectWallet()
+  const { mutate: signPersonalMessage } = useSignPersonalMessage()
+  const wallets = useWallets()
 
   // Generate authentication signature for API calls
-  const generateAuthSignature = async (walletAddress: string): Promise<string | null> => {
+  const generateAuthSignature = async (walletAddress: string): Promise<string> => {
     try {
       const timestamp = Date.now()
       const message = `DaaS Authentication\nTimestamp: ${timestamp}\nWallet: ${walletAddress}`
 
-      // Try to sign message for authentication
-      let signature = null
-      try {
-        const signatureResult = await signPersonalMessage({
-          message: new TextEncoder().encode(message)
-        })
-        signature = signatureResult.signature
-      } catch (signError) {
-        console.warn('Failed to sign message, using simplified auth:', signError)
-        signature = 'unsigned' // Fallback for development
-      }
+      console.log('Attempting to sign authentication message:', message)
+
+      // Sign message for authentication - proper implementation without workarounds
+      const signature = await new Promise<string>((resolve, reject) => {
+        signPersonalMessage(
+          { message: new TextEncoder().encode(message) },
+          {
+            onSuccess: (result) => {
+              console.log('Successfully signed authentication message:', result)
+              resolve(result.signature)
+            },
+            onError: (error) => {
+              console.error('Authentication signature failed:', error)
+              reject(new Error(`Signature failed: ${error?.message || error?.toString() || 'Unknown error'}`))
+            }
+          }
+        )
+      })
 
       const authData = {
         walletAddress,
@@ -78,10 +81,12 @@ const WalletConnector: React.FC<WalletConnectorProps> = ({
         timestamp
       }
 
+      console.log('Generated authentication data:', authData)
       return JSON.stringify(authData)
     } catch (error) {
-      console.error('Failed to generate auth signature:', error)
-      return null // Don't fail connection if signature fails
+      console.error('Critical: Failed to generate auth signature:', error)
+      // Throw error instead of returning null to properly identify the issue
+      throw new Error(`Authentication signature required but failed: ${error?.message || error?.toString()}`)
     }
   }
 
@@ -104,17 +109,44 @@ const WalletConnector: React.FC<WalletConnectorProps> = ({
 
   const connectWallet = async (walletType: 'Suiet' | 'Slush') => {
     console.log('Attempting to connect wallet:', walletType)
+    console.log('Available wallets:', wallets)
     setIsConnecting(true)
     setConnectionError(null)
 
     try {
-      // Connect to the actual wallet - Suiet wallet-kit API
-      console.log('Calling select()...', walletType)
-      await select(walletType)
-      console.log('Select() successful')
+      // Find the specific wallet by name
+      const targetWallet = wallets.find(wallet => {
+        const walletName = wallet.name.toLowerCase()
+        const targetType = walletType.toLowerCase()
+
+        return walletName.includes(targetType) ||
+               (targetType === 'suiet' && walletName.includes('suiet')) ||
+               (targetType === 'slush' && (walletName.includes('slush') || walletName.includes('slush wallet')))
+      })
+
+      if (!targetWallet) {
+        throw new Error(`${walletType} 지갑을 찾을 수 없습니다. 브라우저에 확장프로그램이 설치되어 있는지 확인해주세요.`)
+      }
+
+      console.log('Connecting to wallet:', targetWallet)
+
+      // Connect to specific wallet using mysten dapp-kit
+      connect(
+        { wallet: targetWallet },
+        {
+          onSuccess: () => {
+            console.log('Wallet connection successful')
+            setIsConnecting(false)
+          },
+          onError: (error) => {
+            console.error('Wallet connection failed:', error)
+            setConnectionError(`지갑 연결에 실패했습니다. ${error?.message || error?.toString() || ''} 브라우저에 지갑 확장프로그램이 설치되어 있는지 확인해주세요.`)
+            setIsConnecting(false)
+          }
+        }
+      )
     } catch (error) {
       console.error('Wallet connection failed:', error)
-      console.error('Error details:', error)
       setConnectionError(`지갑 연결에 실패했습니다. ${error?.message || error?.toString() || ''} 브라우저에 지갑 확장프로그램이 설치되어 있는지 확인해주세요.`)
       setIsConnecting(false)
     }
@@ -128,21 +160,21 @@ const WalletConnector: React.FC<WalletConnectorProps> = ({
         return
       }
 
-      if (connected && account && account.address) {
+      if (currentAccount && currentAccount.address) {
         try {
           // Get wallet balance - simplified for now
           let suiBalance = 0
-          // Note: @suiet/wallet-kit doesn't have getBalance, we'll use a placeholder
-          suiBalance = 0 // Default balance - would need to fetch from RPC
+          // Default balance - would need to fetch from RPC
+          suiBalance = 0
 
           // Generate auth signature for API calls
-          const authSignature = await generateAuthSignature(account.address)
+          const authSignature = await generateAuthSignature(currentAccount.address)
 
           const walletInfo: WalletInfo = {
             connected: true,
-            address: account.address,
+            address: currentAccount.address,
             balance: suiBalance,
-            provider: wallet?.name?.includes('Slush') ? 'slush' : 'suiet',
+            provider: 'suiet', // Default to suiet
             authSignature
           }
 
@@ -150,16 +182,20 @@ const WalletConnector: React.FC<WalletConnectorProps> = ({
           setIsConnecting(false)
         } catch (error) {
           console.error('Failed to initialize wallet:', error)
-          setConnectionError('지갑 초기화에 실패했습니다.')
+          if (error?.message?.includes('Authentication signature required')) {
+            setConnectionError(`인증 서명에 실패했습니다: ${error.message}`)
+          } else {
+            setConnectionError(`지갑 초기화에 실패했습니다: ${error?.message || error?.toString() || '알 수 없는 오류'}`)
+          }
           setIsConnecting(false)
         }
-      } else if (!connected && !connecting && !isDisconnecting) {
+      } else if (!currentAccount && !isDisconnecting) {
         setIsConnecting(false)
       }
     }
 
     handleWalletConnection()
-  }, [connected, account, connecting, isDisconnecting])
+  }, [currentAccount, isDisconnecting, onConnect])
 
   const disconnectWallet = async () => {
     setIsDisconnecting(true)
@@ -167,7 +203,7 @@ const WalletConnector: React.FC<WalletConnectorProps> = ({
       // Clear local storage to prevent auto-reconnection
       localStorage.removeItem('daas-wallet')
 
-      await disconnect()
+      disconnect()
       onDisconnect()
       setConnectionError(null)
 

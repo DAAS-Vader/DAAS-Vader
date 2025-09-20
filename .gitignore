@@ -30,6 +30,7 @@ out/
 .cache/
 .parcel-cache/
 .turbo/
+target/
 
 # ───────────────────────────────────────────────────────────────
 # 로그 파일
@@ -153,3 +154,24 @@ project-root/backend/test/
 *.backup
 *.old
 ~*
+test-*.txt
+*AWSCLIV2.pkg
+
+# Logs
+logs
+dev-debug.log
+# Dependency directories
+# Environment variables
+# Editor directories and files
+.idea
+.vscode
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+# OS specific
+
+# Task files
+# tasks.json
+# tasks/ 

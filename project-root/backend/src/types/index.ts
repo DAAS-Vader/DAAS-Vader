@@ -46,6 +46,25 @@ export interface WalrusUploadResponse {
   size: number;
 }
 
+// Walrus 트랜잭션 준비 응답
+export interface WalrusTransactionRequest {
+  txData: string; // 서명되지 않은 트랜잭션 데이터
+  gasObjectId: string;
+  gasBudget: string;
+  metadata: {
+    fileName: string;
+    mimeType: string;
+    epochs: number;
+    size: number;
+  };
+}
+
+// 사용자 지갑 업로드 요청
+export interface UserWalletUploadRequest {
+  signedTransaction: string; // 사용자가 서명한 트랜잭션
+  walletAddress: string;
+}
+
 export interface ProcessedBundle {
   secretFiles: Map<string, Uint8Array>;
   codeFiles: Map<string, Uint8Array>;
@@ -97,6 +116,17 @@ export interface Config {
     url: string;
     serviceToken: string;
     ticketSecret: string;
+  };
+  sealV2?: {
+    packageId?: string;
+    sealRegistryId?: string;
+    enclaveRegistryId?: string;
+    adminPrivateKey?: string;
+    defaultIdentity?: string;
+  };
+  sui?: {
+    rpcUrl?: string;
+    networkType?: string;
   };
   walrus: {
     // SDK configuration
