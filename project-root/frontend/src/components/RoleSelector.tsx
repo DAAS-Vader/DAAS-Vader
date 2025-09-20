@@ -24,42 +24,42 @@ const RoleSelector: React.FC<RoleSelectorProps> = ({ onRoleSelect }) => {
   const roles = [
     {
       id: 'user',
-      title: '서비스 사용자',
-      subtitle: '코드를 배포하고 서비스를 이용하세요',
-      description: '프로젝트를 업로드하고 분산 네트워크에 배포하여 안전하고 효율적인 서비스를 제공받으세요.',
+      title: 'Service User',
+      subtitle: 'Deploy code and use services',
+      description: 'Upload your projects and deploy them on a distributed network to receive safe and efficient services.',
       icon: Users,
       color: 'from-blue-500 to-cyan-500',
       features: [
-        '코드 업로드 & 배포',
-        '실시간 모니터링',
-        '글로벌 CDN',
-        '자동 스케일링'
+        'Code Upload & Deploy',
+        'Real-time Monitoring',
+        'Global CDN',
+        'Auto Scaling'
       ],
       benefits: [
-        { icon: Cloud, text: '99.9% 가동률 보장' },
-        { icon: Shield, text: '블록체인 보안' },
-        { icon: Zap, text: '빠른 배포 (< 30초)' },
-        { icon: Globe, text: '전세계 노드 네트워크' }
+        { icon: Cloud, text: '99.9% Uptime Guarantee' },
+        { icon: Shield, text: 'Blockchain Security' },
+        { icon: Zap, text: 'Fast Deploy (< 30s)' },
+        { icon: Globe, text: 'Global Node Network' }
       ]
     },
     {
       id: 'provider',
-      title: '노드 제공자',
-      subtitle: '컴퓨팅 자원을 제공하고 수익을 얻으세요',
-      description: '여유 컴퓨팅 자원을 네트워크에 제공하여 지속적인 수익을 창출하고 탈중앙화 생태계에 기여하세요.',
+      title: 'Node Provider',
+      subtitle: 'Provide computing resources and earn revenue',
+      description: 'Provide your spare computing resources to the network to generate continuous revenue and contribute to the decentralized ecosystem.',
       icon: Server,
       color: 'from-green-500 to-emerald-500',
       features: [
-        '자원 판매 & 수익화',
-        '자동 작업 배정',
-        '수익 대시보드',
-        '평판 시스템'
+        'Resource Sales & Monetization',
+        'Automatic Job Assignment',
+        'Revenue Dashboard',
+        'Reputation System'
       ],
       benefits: [
-        { icon: Coins, text: '24/7 패시브 인컴' },
-        { icon: Zap, text: '자동 최적화' },
-        { icon: Shield, text: '스마트 컨트랙트 보장' },
-        { icon: Globe, text: '글로벌 수요 매칭' }
+        { icon: Coins, text: '24/7 Passive Income' },
+        { icon: Zap, text: 'Auto Optimization' },
+        { icon: Shield, text: 'Smart Contract Guarantee' },
+        { icon: Globe, text: 'Global Demand Matching' }
       ]
     }
   ]
@@ -85,11 +85,11 @@ const RoleSelector: React.FC<RoleSelectorProps> = ({ onRoleSelect }) => {
             </h1>
           </div>
           <h2 className="text-3xl md:text-4xl font-bold mb-4">
-            어떤 역할로 참여하시겠습니까?
+            How would you like to participate?
           </h2>
           <p className="text-lg text-muted-foreground max-w-2xl mx-auto">
-            탈중앙화 서버리스 플랫폼에서 원하는 역할을 선택하여
-            Web3의 새로운 경험을 시작하세요
+            Choose your desired role on the decentralized serverless platform
+            and start a new Web3 experience
           </p>
         </motion.div>
 
@@ -129,7 +129,7 @@ const RoleSelector: React.FC<RoleSelectorProps> = ({ onRoleSelect }) => {
 
                   {/* Features */}
                   <div className="mb-6">
-                    <h4 className="font-semibold mb-3">주요 기능</h4>
+                    <h4 className="font-semibold mb-3">Key Features</h4>
                     <div className="grid grid-cols-2 gap-2">
                       {role.features.map((feature) => (
                         <Badge key={feature} variant="secondary" className="justify-start">
@@ -141,7 +141,7 @@ const RoleSelector: React.FC<RoleSelectorProps> = ({ onRoleSelect }) => {
 
                   {/* Benefits */}
                   <div className="mb-8">
-                    <h4 className="font-semibold mb-3">핵심 장점</h4>
+                    <h4 className="font-semibold mb-3">Core Benefits</h4>
                     <div className="space-y-3">
                       {role.benefits.map((benefit) => {
                         const BenefitIcon = benefit.icon
@@ -163,7 +163,7 @@ const RoleSelector: React.FC<RoleSelectorProps> = ({ onRoleSelect }) => {
                     className={`w-full bg-gradient-to-r ${role.color} hover:opacity-90 text-white border-0 group-hover:scale-105 transition-transform duration-300`}
                     size="lg"
                   >
-                    {role.title}로 시작하기
+                    Start as {role.title}
                     <ArrowRight className="w-5 h-5 ml-2" />
                   </Button>
                 </Card>
@@ -180,7 +180,7 @@ const RoleSelector: React.FC<RoleSelectorProps> = ({ onRoleSelect }) => {
           className="text-center mt-12"
         >
           <p className="text-sm text-muted-foreground">
-            언제든지 역할을 전환할 수 있습니다. 먼저 원하는 역할을 선택해주세요.
+            You can switch roles at any time. Please select your preferred role first.
           </p>
         </motion.div>
       </div>

@@ -695,15 +695,15 @@ const ProjectUpload: React.FC<ProjectUploadProps> = ({
           className="text-center mb-8"
         >
           <h1 className="text-4xl md:text-5xl font-bold bg-gradient-to-r from-foreground to-foreground/70 bg-clip-text text-transparent mb-4">
-            DAAS 업로드
+            DAAS Upload
           </h1>
           <p className="text-lg text-muted-foreground max-w-2xl mx-auto">
-            프로젝트 파일 또는 Docker 이미지를 블록체인에 안전하게 저장하세요
+            Securely store your project files or Docker images on the blockchain
           </p>
           <div className="mt-4 flex items-center justify-center gap-2">
             
             {walletInfo?.balance && (
-              <Badge variant="outline">잔액: {walletInfo.balance} SUI</Badge>
+              <Badge variant="outline">Balance: {walletInfo.balance} SUI</Badge>
             )}
           </div>
         </motion.div>
@@ -713,11 +713,11 @@ const ProjectUpload: React.FC<ProjectUploadProps> = ({
             <TabsList className="grid w-full grid-cols-2 mb-6">
               <TabsTrigger value="project" className="data-[state=active]:bg-primary/10">
                 <Folder className="w-4 h-4 mr-2" />
-                프로젝트 업로드
+                Project Upload
               </TabsTrigger>
               <TabsTrigger value="docker" className="data-[state=active]:bg-primary/10">
                 <Package className="w-4 h-4 mr-2" />
-                Docker 이미지 업로드
+                Docker Image Upload
               </TabsTrigger>
             </TabsList>
 
@@ -752,12 +752,12 @@ const ProjectUpload: React.FC<ProjectUploadProps> = ({
                 />
 
                 <Upload className="w-12 h-12 mx-auto mb-4 text-muted-foreground" />
-                <p className="text-lg font-medium mb-2">프로젝트 파일 업로드</p>
+                <p className="text-lg font-medium mb-2">Project File Upload</p>
                 <p className="text-sm text-muted-foreground mb-4">
-                  파일을 드래그하거나 클릭하여 선택하세요
+                  Drag and drop files or click to select
                 </p>
                 <p className="text-xs text-muted-foreground mb-4">
-                  지원 형식: .zip, .tar.gz, .tgz (최대 {formatFileSize(maxFileSize)})
+                  Supported formats: .zip, .tar.gz, .tgz (max {formatFileSize(maxFileSize)})
                 </p>
                 <div className="flex gap-2 justify-center">
                   <Button
@@ -765,14 +765,14 @@ const ProjectUpload: React.FC<ProjectUploadProps> = ({
                     variant="outline"
                   >
                     <File className="w-4 h-4 mr-2" />
-                    파일 선택
+                    Select Files
                   </Button>
                   <Button
                     onClick={() => folderInputRef.current?.click()}
                     variant="outline"
                   >
                     <Folder className="w-4 h-4 mr-2" />
-                    폴더 선택
+                    Select Folder
                   </Button>
                 </div>
               </div>
@@ -781,9 +781,9 @@ const ProjectUpload: React.FC<ProjectUploadProps> = ({
             <TabsContent value="docker" className="space-y-4">
               <div className="space-y-4">
                 <div>
-                  <label className="text-sm font-medium mb-2 block">Docker 이미지 이름</label>
+                  <label className="text-sm font-medium mb-2 block">Docker Image Name</label>
                   <Input
-                    placeholder="예: myapp:latest"
+                    placeholder="e.g.: myapp:latest"
                     value={dockerImageName}
                     onChange={(e) => setDockerImageName(e.target.value)}
                     className="mb-4"
@@ -793,7 +793,7 @@ const ProjectUpload: React.FC<ProjectUploadProps> = ({
                 <div className="bg-muted/50 rounded-lg p-4 mb-4">
                   <h3 className="font-medium mb-2 flex items-center">
                     <HardDrive className="w-4 h-4 mr-2" />
-                    Docker 이미지 준비 방법
+                    How to Prepare Docker Images
                   </h3>
                   <ol className="text-sm text-muted-foreground space-y-1 list-decimal list-inside">
                     <li>Docker 이미지 빌드: <code className="bg-background px-1 rounded">docker build -t myapp .</code></li>

@@ -61,7 +61,7 @@ const NodeSetup: React.FC<NodeSetupProps> = ({ onNodeCreate, onCancel, walletInf
 
   const handleCreateNode = async () => {
     if (!walletInfo?.address) {
-      setError('지갑이 연결되지 않았습니다.')
+      setError('Wallet is not connected.')
       return
     }
 
@@ -69,11 +69,11 @@ const NodeSetup: React.FC<NodeSetupProps> = ({ onNodeCreate, onCancel, walletInf
     setError(null)
 
     try {
-      console.log(`🔑 노드 제공자 주소: ${walletInfo.address}`)
+      console.log(`🔑 Node provider address: ${walletInfo.address}`)
 
-      // 실제 컨트랙트 서비스를 사용하여 노드 등록
+      // Register node using actual contract service
       const result = await nodeRegistryService.registerNode(
-        null as any, // TODO: 실제 signer 전달
+        null as any, // TODO: pass actual signer
         {
           cpu_cores: resources.cpu,
           memory_gb: resources.memory,
@@ -83,14 +83,14 @@ const NodeSetup: React.FC<NodeSetupProps> = ({ onNodeCreate, onCancel, walletInf
         }
       )
 
-      console.log('✅ 노드 등록 완료:', result)
-      console.log(`📝 노드 ${walletInfo.address}가 컨트랙트에 등록되었습니다`)
+      console.log('✅ Node registration completed:', result)
+      console.log(`📝 Node ${walletInfo.address} has been registered to the contract`)
 
-      // 성공 시 대시보드로 이동
+      // Move to dashboard on success
       onNodeCreate()
     } catch (err) {
-      console.error('노드 생성 실패:', err)
-      setError(err instanceof Error ? err.message : '노드 생성에 실패했습니다.')
+      console.error('Node creation failed:', err)
+      setError(err instanceof Error ? err.message : 'Failed to create node.')
     } finally {
       setIsCreating(false)
     }
@@ -110,7 +110,7 @@ const NodeSetup: React.FC<NodeSetupProps> = ({ onNodeCreate, onCancel, walletInf
                 </div>
                 <h1 className="text-xl font-bold">DaaS Platform</h1>
                 <Badge variant="outline" className="ml-2">
-                  노드 제공자
+                  Node Provider
                 </Badge>
               </div>
 
@@ -126,7 +126,7 @@ const NodeSetup: React.FC<NodeSetupProps> = ({ onNodeCreate, onCancel, walletInf
                     size="sm"
                     onClick={onRoleChange}
                   >
-                    역할 변경
+                    Change Role
                   </Button>
                 )}
                 <Button
@@ -134,7 +134,7 @@ const NodeSetup: React.FC<NodeSetupProps> = ({ onNodeCreate, onCancel, walletInf
                   size="sm"
                   onClick={onCancel}
                 >
-                  취소
+                  Cancel
                 </Button>
               </div>
             </div>
@@ -149,9 +149,9 @@ const NodeSetup: React.FC<NodeSetupProps> = ({ onNodeCreate, onCancel, walletInf
           <div className="w-16 h-16 bg-gradient-to-br from-green-500 to-emerald-500 rounded-xl flex items-center justify-center mx-auto mb-4">
             <Server className="w-8 h-8 text-white" />
           </div>
-          <h1 className="text-4xl font-bold mb-2">워커 노드 생성</h1>
+          <h1 className="text-4xl font-bold mb-2">Create Worker Node</h1>
           <p className="text-muted-foreground text-lg">
-            컴퓨팅 자원을 설정하고 네트워크에 노드를 생성하세요
+            Configure computing resources and create a node on the network
           </p>
         </motion.div>
 
@@ -167,21 +167,21 @@ const NodeSetup: React.FC<NodeSetupProps> = ({ onNodeCreate, onCancel, walletInf
               <div className="w-8 h-8 bg-primary rounded-full flex items-center justify-center text-primary-foreground text-sm font-semibold">
                 1
               </div>
-              <span className="ml-2 font-medium">자원 설정</span>
+              <span className="ml-2 font-medium">Resource Setup</span>
             </div>
             <div className="w-12 h-px bg-muted-foreground/30" />
             <div className="flex items-center">
               <div className="w-8 h-8 bg-muted-foreground/20 rounded-full flex items-center justify-center text-muted-foreground text-sm font-semibold">
                 2
               </div>
-              <span className="ml-2 text-muted-foreground">노드 생성</span>
+              <span className="ml-2 text-muted-foreground">Node Creation</span>
             </div>
             <div className="w-12 h-px bg-muted-foreground/30" />
             <div className="flex items-center">
               <div className="w-8 h-8 bg-muted-foreground/20 rounded-full flex items-center justify-center text-muted-foreground text-sm font-semibold">
                 3
               </div>
-              <span className="ml-2 text-muted-foreground">운영 시작</span>
+              <span className="ml-2 text-muted-foreground">Start Operation</span>
             </div>
           </div>
         </motion.div>
@@ -193,14 +193,14 @@ const NodeSetup: React.FC<NodeSetupProps> = ({ onNodeCreate, onCancel, walletInf
           transition={{ delay: 0.2 }}
         >
           <Card className="p-8 mb-6">
-            <h3 className="text-xl font-semibold mb-6">제공할 컴퓨팅 자원</h3>
+            <h3 className="text-xl font-semibold mb-6">Computing Resources to Provide</h3>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
               {/* CPU */}
               <div className="space-y-4">
                 <div className="flex items-center gap-2">
                   <Cpu className="w-5 h-5 text-blue-500" />
-                  <span className="font-medium">CPU 코어</span>
+                  <span className="font-medium">CPU Cores</span>
                 </div>
                 <div className="flex items-center gap-4">
                   <Button
@@ -214,7 +214,7 @@ const NodeSetup: React.FC<NodeSetupProps> = ({ onNodeCreate, onCancel, walletInf
                   <div className="flex-1">
                     <div className="text-center mb-2">
                       <span className="text-2xl font-bold">{resources.cpu}</span>
-                      <span className="text-sm text-muted-foreground ml-1">코어</span>
+                      <span className="text-sm text-muted-foreground ml-1">cores</span>
                     </div>
                     <Progress value={(resources.cpu / 16) * 100} className="h-2" />
                   </div>
@@ -233,7 +233,7 @@ const NodeSetup: React.FC<NodeSetupProps> = ({ onNodeCreate, onCancel, walletInf
               <div className="space-y-4">
                 <div className="flex items-center gap-2">
                   <Server className="w-5 h-5 text-green-500" />
-                  <span className="font-medium">메모리</span>
+                  <span className="font-medium">Memory</span>
                 </div>
                 <div className="flex items-center gap-4">
                   <Button
@@ -266,7 +266,7 @@ const NodeSetup: React.FC<NodeSetupProps> = ({ onNodeCreate, onCancel, walletInf
               <div className="space-y-4">
                 <div className="flex items-center gap-2">
                   <HardDrive className="w-5 h-5 text-purple-500" />
-                  <span className="font-medium">스토리지</span>
+                  <span className="font-medium">Storage</span>
                 </div>
                 <div className="flex items-center gap-4">
                   <Button
@@ -299,7 +299,7 @@ const NodeSetup: React.FC<NodeSetupProps> = ({ onNodeCreate, onCancel, walletInf
               <div className="space-y-4">
                 <div className="flex items-center gap-2">
                   <Zap className="w-5 h-5 text-yellow-500" />
-                  <span className="font-medium">네트워크 대역폭</span>
+                  <span className="font-medium">Network Bandwidth</span>
                 </div>
                 <div className="flex items-center gap-4">
                   <Button
@@ -332,7 +332,7 @@ const NodeSetup: React.FC<NodeSetupProps> = ({ onNodeCreate, onCancel, walletInf
               <div className="space-y-4">
                 <div className="flex items-center gap-2">
                   <Globe className="w-5 h-5 text-indigo-500" />
-                  <span className="font-medium">서비스 지역</span>
+                  <span className="font-medium">Service Region</span>
                 </div>
                 <div className="flex-1">
                   <select
@@ -347,7 +347,7 @@ const NodeSetup: React.FC<NodeSetupProps> = ({ onNodeCreate, onCancel, walletInf
                     ))}
                   </select>
                   <p className="text-sm text-muted-foreground mt-2">
-                    선택한 지역에서 컴퓨팅 자원을 제공합니다
+                    Provide computing resources in the selected region
                   </p>
                 </div>
               </div>
@@ -375,18 +375,18 @@ const NodeSetup: React.FC<NodeSetupProps> = ({ onNodeCreate, onCancel, walletInf
               {isCreating ? (
                 <>
                   <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin mr-2" />
-                  노드 생성 중...
+                  Creating node...
                 </>
               ) : (
                 <>
-                  노드 생성하기
+                  Create Node
                   <ArrowRight className="w-5 h-5 ml-2" />
                 </>
               )}
             </Button>
 
             <p className="text-sm text-muted-foreground mt-4">
-              노드 생성 후 언제든지 설정을 변경할 수 있습니다
+              You can change settings anytime after node creation
             </p>
           </div>
         </motion.div>

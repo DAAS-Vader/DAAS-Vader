@@ -43,10 +43,10 @@ export default function Home() {
   const currentAccount = useCurrentAccount()
 
   const steps = [
-    { id: 'wallet', title: '지갑 연결', icon: Wallet, description: 'Sui 지갑을 연결하여 시작하세요' },
-    { id: 'requirements', title: '최소 스펙 설정', icon: Settings, description: '최소 하드웨어 사양을 설정하세요' },
-    { id: 'upload', title: '코드 업로드', icon: Upload, description: '프로젝트를 업로드하세요' },
-    { id: 'monitor', title: '모니터링', icon: Activity, description: '실시간으로 모니터링하세요' }
+    { id: 'wallet', title: 'Connect Wallet', icon: Wallet, description: 'Connect your Sui wallet to get started' },
+    { id: 'requirements', title: 'Set Min Requirements', icon: Settings, description: 'Set minimum hardware specifications' },
+    { id: 'upload', title: 'Upload Code', icon: Upload, description: 'Upload your project' },
+    { id: 'monitor', title: 'Monitoring', icon: Activity, description: 'Monitor in real-time' }
   ]
 
   const isStepCompleted = (stepId: string) => {
@@ -88,21 +88,21 @@ export default function Home() {
     setIsCheckingJobs(true)
 
     try {
-      // 사용자의 활성 작업 확인
-      console.log(`🔍 사용자 ${wallet.address}의 활성 작업 확인 중...`)
+      // Check user's active jobs
+      console.log(`🔍 Checking active jobs for user ${wallet.address}...`)
       const userActiveJobs = await jobRequestService.getUserActiveJobs(wallet.address)
 
       if (userActiveJobs.length > 0) {
-        console.log(`✅ ${userActiveJobs.length}개의 활성 작업 발견`)
-        // 활성 작업이 있는 경우 모니터링 단계로 이동
+        console.log(`✅ Found ${userActiveJobs.length} active jobs`)
+        // If there are active jobs, go to monitoring step
         setCurrentStep('monitor')
       } else {
-        console.log(`📝 활성 작업 없음, 최소 스펙 설정 단계로 이동`)
+        console.log(`📝 No active jobs, moving to requirements setup step`)
         setCurrentStep('requirements')
       }
     } catch (error) {
-      console.error('활성 작업 확인 실패:', error)
-      // 오류 발생 시 기본적으로 최소 스펙 설정 단계로 이동
+      console.error('Failed to check active jobs:', error)
+      // On error, default to requirements setup step
       setCurrentStep('requirements')
     } finally {
       setIsCheckingJobs(false)
@@ -132,17 +132,17 @@ export default function Home() {
   // New function to handle successful upload completion
   const handleUploadComplete = (uploadResult: { success: boolean; message: string; cid_code?: string; blobId?: string }) => {
     console.log('Upload completed with result:', uploadResult)
-    // 업로드 완료 후 자동으로 계약 체결 단계로 이동
+    // Automatically move to contracting step after upload completion
     setCurrentStep('contracting')
   }
 
   const handleContractingComplete = () => {
-    // 계약 체결 완료 후 자동으로 배포 생성 및 모니터링으로 이동
+    // Automatically create deployment and move to monitoring after contracting completion
     const mockDeployment: Deployment = {
       id: 'deploy-1',
       projectId: 'project-1',
       version: 'v1.0.0',
-      nodes: [], // 노드 선택 단계가 제거됨
+      nodes: [], // Node selection step removed
       status: 'running',
       environment: {},
       runtime: 'nodejs',
@@ -195,16 +195,16 @@ export default function Home() {
         return (
           <div className="space-y-6">
             <Card className="p-6">
-              <h3 className="text-lg font-semibold mb-4">지갑 연결</h3>
+              <h3 className="text-lg font-semibold mb-4">Connect Wallet</h3>
               <p className="text-sm text-muted-foreground mb-6">
-                Sui 네트워크에 연결하려면 지갑을 연결해주세요.
+                Please connect your wallet to connect to the Sui network.
               </p>
               <div className="flex justify-center">
                 <ConnectButton className="w-full max-w-sm" />
               </div>
               {currentAccount && (
                 <div className="mt-4 p-4 bg-muted rounded-lg">
-                  <p className="text-sm text-muted-foreground">연결된 주소:</p>
+                  <p className="text-sm text-muted-foreground">Connected Address:</p>
                   <p className="text-xs font-mono mt-1">{currentAccount.address}</p>
                 </div>
               )}
@@ -212,7 +212,7 @@ export default function Home() {
             {isCheckingJobs && (
               <div className="text-center p-4">
                 <div className="w-6 h-6 border-2 border-primary border-t-transparent rounded-full animate-spin mx-auto mb-2" />
-                <p className="text-muted-foreground text-sm">활성 작업 확인 중...</p>
+                <p className="text-muted-foreground text-sm">Checking active jobs...</p>
               </div>
             )}
           </div>
@@ -271,11 +271,11 @@ export default function Home() {
               <img
                 src="/DAAS-VADER.svg"
                 alt="DaaS Platform Logo"
-                className="w-8 h-8"
+                className="w-12 h-12"
               />
               <h1 className="text-xl font-bold">DaaS Platform</h1>
               <Badge variant="outline" className="ml-2">
-                {selectedRole === 'user' ? '서비스 사용자' : '노드 제공자'}
+                {selectedRole === 'user' ? 'Service User' : 'Node Provider'}
               </Badge>
             </div>
 
@@ -285,14 +285,14 @@ export default function Home() {
                 size="sm"
                 onClick={() => window.location.href = '/staking'}
               >
-                스테이킹 현황
+                Staking Status
               </Button>
               <Button
                 variant="ghost"
                 size="sm"
                 onClick={handleRoleChange}
               >
-                역할 변경
+                Change Role
               </Button>
             </div>
           </div>
