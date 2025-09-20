@@ -421,18 +421,40 @@ const ProjectUpload: React.FC<ProjectUploadProps> = ({
       }
 
       if (uploadType === 'docker') {
-        // Docker 이미지 파일 확장자 확인
-        const isValid = file.name.endsWith('.tar') ||
-                       file.name.endsWith('.docker') ||
-                       file.name.endsWith('.dockerimage') ||
-                       file.type === 'application/x-tar'
+        // Docker 이미지 및 설정 파일 허용
+        const fileName = file.name.toLowerCase()
+        const isValid = fileName.endsWith('.tar') ||
+                       fileName.endsWith('.tar.gz') ||
+                       fileName.endsWith('.tgz') ||
+                       fileName.endsWith('.json') ||  // deploy.json
+                       fileName.endsWith('.yaml') ||   // docker-compose.yaml
+                       fileName.endsWith('.yml') ||    // docker-compose.yml
+                       fileName === 'dockerfile' ||    // Dockerfile (빌드용)
+                       file.type === 'application/x-tar' ||
+                       file.type === 'application/gzip' ||
+                       file.type === 'application/json'
         if (!isValid) {
-          console.error(`File ${file.name} is not a valid Docker image file`)
+          console.error(`File ${file.name} is not a valid Docker deployment file`)
         }
         return isValid
       } else {
         // 프로젝트 파일 확장자 확인
-        const isValid = acceptedFileTypes.some(type => file.name.endsWith(type))
+        const fileName = file.name.toLowerCase()
+        // acceptedFileTypes에 '*'가 있으면 모든 파일 허용
+        if (acceptedFileTypes.includes('*')) {
+          return true
+        }
+        // Dockerfile 특별 처리
+        if (fileName === 'dockerfile' || fileName.startsWith('dockerfile')) {
+          return true
+        }
+        // 일반 확장자 확인
+        const isValid = acceptedFileTypes.some(type => {
+          if (type === 'Dockerfile') {
+            return fileName === 'dockerfile'
+          }
+          return file.name.endsWith(type)
+        })
         if (!isValid) {
           console.error(`File ${file.name} has invalid extension`)
         }
@@ -444,7 +466,7 @@ const ProjectUpload: React.FC<ProjectUploadProps> = ({
       setUploadProgress({
         stage: 'error',
         message: uploadType === 'docker' ?
-          'Docker 이미지 파일(.tar)만 업로드 가능합니다' :
+          'Docker 이미지 tar 파일(.tar, .tar.gz)만 업로드 가능합니다' :
           '유효한 프로젝트 파일을 선택해주세요'
       })
       return
@@ -576,7 +598,7 @@ const ProjectUpload: React.FC<ProjectUploadProps> = ({
                   ref={fileInputRef}
                   type="file"
                   multiple
-                  accept={acceptedFileTypes.join(',')}
+
                   onChange={handleFileSelect}
                   className="hidden"
                 />
@@ -635,7 +657,7 @@ const ProjectUpload: React.FC<ProjectUploadProps> = ({
                   </h3>
                   <ol className="text-sm text-muted-foreground space-y-1 list-decimal list-inside">
                     <li>Docker 이미지 빌드: <code className="bg-background px-1 rounded">docker build -t myapp .</code></li>
-                    <li>이미지를 tar 파일로 저장: <code className="bg-background px-1 rounded">docker save myapp &gt; myapp.tar</code></li>
+                    <li>이미지를 tar 파일로 저장: <code className="bg-background px-1 rounded">docker save myapp:latest -o myapp.tar</code></li>
                     <li>생성된 tar 파일을 여기에 업로드</li>
                   </ol>
                 </div>
@@ -655,7 +677,7 @@ const ProjectUpload: React.FC<ProjectUploadProps> = ({
                   <input
                     ref={dockerFileInputRef}
                     type="file"
-                    accept=".tar,.docker,.dockerimage"
+                    accept=".tar,.tar.gz,.tgz,application/x-tar,application/gzip"
                     onChange={handleFileSelect}
                     className="hidden"
                   />
@@ -666,7 +688,7 @@ const ProjectUpload: React.FC<ProjectUploadProps> = ({
                     tar 파일을 드래그하거나 클릭하여 선택하세요
                   </p>
                   <p className="text-xs text-muted-foreground mb-4">
-                    지원 형식: .tar (최대 {formatFileSize(maxFileSize)})
+                    지원 형식: .tar, .tar.gz, .tgz (최대 {formatFileSize(maxFileSize)})
                   </p>
                   <Button
                     onClick={() => dockerFileInputRef.current?.click()}
@@ -754,10 +776,15 @@ const ProjectUpload: React.FC<ProjectUploadProps> = ({
                 </div>
 
                 {uploadProgress.blobId && (
-                  <div className="pt-2 border-t">
+                  <div className="pt-2 border-t space-y-1">
                     <p className="text-xs text-muted-foreground">
                       Blob ID: <code className="bg-muted px-1 rounded">{uploadProgress.blobId}</code>
                     </p>
+                    {uploadProgress.txHash && uploadProgress.txHash !== 'unknown' && (
+                      <p className="text-xs text-muted-foreground">
+                        다운로드 URL: <a href={uploadProgress.txHash} target="_blank" rel="noopener noreferrer" className="text-blue-500 hover:underline break-all">{uploadProgress.txHash}</a>
+                      </p>
+                    )}
                   </div>
                 )}
               </div>
@@ -788,13 +815,29 @@ const ProjectUpload: React.FC<ProjectUploadProps> = ({
                 </div>
                 {uploadResponse && (
                   <div className="pt-2 border-t space-y-1">
-                    <p className="text-xs text-muted-foreground">
-                      코드 Blob ID: <code className="bg-muted px-1 rounded">{uploadResponse.codeBlobId}</code>
-                    </p>
+                    {uploadResponse.codeBlobId && (
+                      <>
+                        <p className="text-xs text-muted-foreground">
+                          코드 Blob ID: <code className="bg-muted px-1 rounded">{uploadResponse.codeBlobId}</code>
+                        </p>
+                        {uploadResponse.codeUrl && (
+                          <p className="text-xs text-muted-foreground">
+                            다운로드 URL: <a href={uploadResponse.codeUrl} target="_blank" rel="noopener noreferrer" className="text-blue-500 hover:underline break-all">{uploadResponse.codeUrl}</a>
+                          </p>
+                        )}
+                      </>
+                    )}
                     {uploadResponse.dockerBlobId && (
-                      <p className="text-xs text-muted-foreground">
-                        Docker Blob ID: <code className="bg-muted px-1 rounded">{uploadResponse.dockerBlobId}</code>
-                      </p>
+                      <>
+                        <p className="text-xs text-muted-foreground">
+                          Docker Blob ID: <code className="bg-muted px-1 rounded">{uploadResponse.dockerBlobId}</code>
+                        </p>
+                        {uploadResponse.dockerUrl && (
+                          <p className="text-xs text-muted-foreground">
+                            Docker 다운로드 URL: <a href={uploadResponse.dockerUrl} target="_blank" rel="noopener noreferrer" className="text-blue-500 hover:underline break-all">{uploadResponse.dockerUrl}</a>
+                          </p>
+                        )}
+                      </>
                     )}
                   </div>
                 )}

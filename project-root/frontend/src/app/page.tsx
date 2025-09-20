@@ -192,7 +192,13 @@ export default function Home() {
             onFileUpload={handleProjectUpload}
             onUploadComplete={handleUploadComplete}
             maxFileSize={500 * 1024 * 1024} // 500MB for docker images
-            acceptedFileTypes={['.zip', '.tar.gz', '.tgz', '.tar', '.docker', '.dockerimage']}
+            acceptedFileTypes={[
+              '.zip', '.tar.gz', '.tgz', '.tar',
+              '.docker', '.dockerimage',
+              'Dockerfile', '.dockerfile',
+              '.yaml', '.yml',  // Docker compose files
+              '*'  // Accept all files
+            ]}
           />
         )
 

@@ -1,6 +1,6 @@
 // Hybrid Walrus implementation: SDK first, HTTP API fallback
-// Walrus SDK is temporarily disabled due to WASM chunk loading issues in Next.js
-// Using HTTP API directly for all operations
+// Walrus client with SDK-first approach and HTTP API fallback
+// SDK is preferred for better performance and features, HTTP API as backup
 
 export interface WalrusUploadOptions {
   epochs?: number;
@@ -32,6 +32,218 @@ export interface WalrusProjectUploadResult {
 const WALRUS_CONFIG = {
   publisher: 'https://publisher.walrus-testnet.walrus.space',
   aggregator: 'https://aggregator.walrus-testnet.walrus.space'
+};
+
+// SDK initialization state
+interface WalrusSDKInstance {
+  store: (data: Uint8Array, options: { epochs: number; permanent: boolean }) => Promise<{
+    blobId?: string;
+    blob_id?: string;
+    isNew?: boolean;
+  }>;
+  read: (blobId: string) => Promise<Uint8Array>;
+  ping: () => Promise<void>;
+}
+
+let sdkInstance: WalrusSDKInstance | null = null;
+let sdkInitialized = false;
+let sdkInitError: Error | null = null;
+let initializationAttempts = 0;
+const MAX_INIT_ATTEMPTS = 3;
+
+// Retry configuration
+const RETRY_CONFIG = {
+  maxAttempts: 3,
+  initialDelay: 1000,
+  maxDelay: 5000,
+  backoffMultiplier: 2
+};
+
+// Helper function for exponential backoff
+const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
+
+// Initialize Walrus SDK (dynamic import for WASM) with retry logic
+const initializeWalrusSDK = async (): Promise<boolean> => {
+  if (sdkInitialized && sdkInstance) {
+    return true;
+  }
+  
+  if (sdkInitError && initializationAttempts >= MAX_INIT_ATTEMPTS) {
+    console.warn('SDK permanently failed after max attempts:', sdkInitError.message);
+    return false;
+  }
+
+  try {
+    console.log(`🚀 Initializing Walrus SDK (attempt ${initializationAttempts + 1}/${MAX_INIT_ATTEMPTS})...`);
+    initializationAttempts++;
+    
+    // Dynamic import to handle WASM loading
+    const { WalrusClient } = await import('@mysten/walrus');
+    const { getFullnodeUrl, SuiClient } = await import('@mysten/sui/client');
+    
+    // Initialize Sui client for testnet
+    const suiClient = new SuiClient({
+      url: getFullnodeUrl('testnet'),
+    });
+    
+    // Initialize SDK with testnet configuration and Sui client
+    // According to docs: WalrusClient needs both network and suiClient
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const client = new (WalrusClient as any)({
+      network: 'testnet',
+      suiClient: suiClient,
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    }) as any;
+    
+    // Debug: WalrusClient 인스턴스 구조 확인
+    console.log('WalrusClient instance:', client);
+    console.log('Available methods:', Object.getOwnPropertyNames(Object.getPrototypeOf(client)));
+    
+    // Wrap the client to match our interface
+    // Based on actual API: only readBlob and getSecondarySliver are available
+    // Store operations will fall back to HTTP API
+    sdkInstance = {
+      store: async (data: Uint8Array, options: { epochs: number; permanent: boolean }) => {
+        try {
+          // Use writeBlob method for uploading to Walrus
+          if (typeof client.writeBlob === 'function') {
+            console.log('📤 Using SDK writeBlob method for upload');
+            const result = await client.writeBlob(data, {
+              epochs: options.epochs || 5,
+              deletionType: options.permanent ? 'permanent' : 'ephemeral'
+            });
+            return result;
+          } else if (typeof client.storeBlob === 'function') {
+            console.log('📤 Using SDK storeBlob method for upload');
+            const result = await client.storeBlob(data, options);
+            return result;
+          } else {
+            console.error('Available methods on client:', Object.getOwnPropertyNames(Object.getPrototypeOf(client)));
+            throw new Error('WalrusClient does not have writeBlob or storeBlob method');
+          }
+        } catch (error) {
+          console.error('SDK upload error:', error);
+          throw error;
+        }
+      },
+      read: async (blobId: string) => {
+        try {
+          // Based on actual API analysis: use readBlob method
+          if (typeof client.readBlob === 'function') {
+            console.log('📥 Using SDK readBlob method for blob:', blobId);
+            const result = await client.readBlob(blobId);
+            return result;
+          } else {
+            console.error('readBlob method not found on client:', client);
+            console.error('Available methods:', Object.getOwnPropertyNames(Object.getPrototypeOf(client)));
+            throw new Error('WalrusClient does not have readBlob method');
+          }
+        } catch (error) {
+          console.error('SDK readBlob error:', error);
+          throw error;
+        }
+      },
+      ping: async () => {
+        try {
+          // SDK ping test: check if readBlob method exists as basic health check
+          if (typeof client.readBlob === 'function') {
+            console.log('✅ SDK health check: readBlob method available');
+            return Promise.resolve();
+          } else {
+            throw new Error('SDK not properly initialized: readBlob method missing');
+          }
+        } catch (error) {
+          console.error('SDK ping error:', error);
+          throw error;
+        }
+      },
+    };
+    
+    // Test SDK functionality with timeout
+    const pingTimeout = new Promise((_, reject) => 
+      setTimeout(() => reject(new Error('SDK ping timeout')), 5000)
+    );
+    
+    await Promise.race([
+      sdkInstance.ping(),
+      pingTimeout
+    ]);
+    
+    sdkInitialized = true;
+    sdkInitError = null;
+    console.log('✅ Walrus SDK initialized successfully');
+    return true;
+  } catch (error) {
+    sdkInitError = error instanceof Error ? error : new Error(String(error));
+    console.error(`❌ SDK initialization attempt ${initializationAttempts} failed:`, sdkInitError);
+    
+    if (initializationAttempts < MAX_INIT_ATTEMPTS) {
+      const delay = Math.min(
+        RETRY_CONFIG.initialDelay * Math.pow(RETRY_CONFIG.backoffMultiplier, initializationAttempts - 1),
+        RETRY_CONFIG.maxDelay
+      );
+      console.log(`⏳ Will retry SDK initialization in ${delay}ms...`);
+      await sleep(delay);
+      return initializeWalrusSDK(); // Recursive retry
+    }
+    
+    console.log('⚠️ SDK initialization failed permanently, will use HTTP API fallback');
+    return false;
+  }
+};
+
+// SDK upload implementation
+const uploadViaSDK = async (
+  data: Uint8Array | Blob | File,
+  options?: WalrusUploadOptions
+): Promise<WalrusUploadResult> => {
+  try {
+    console.log('📤 Using Walrus SDK for upload...');
+    
+    if (!sdkInstance) {
+      throw new Error('SDK not initialized');
+    }
+
+    // Convert data to Uint8Array if needed
+    let uint8Data: Uint8Array;
+    if (data instanceof Uint8Array) {
+      uint8Data = data;
+    } else if (data instanceof Blob) {
+      const buffer = await data.arrayBuffer();
+      uint8Data = new Uint8Array(buffer);
+    } else {
+      throw new Error('Unsupported data type for SDK upload');
+    }
+
+    console.log('📦 SDK upload data size:', uint8Data.length, 'bytes');
+
+    // SDK upload with options
+    const result = await sdkInstance.store(uint8Data, {
+      epochs: options?.epochs || 10,
+      permanent: options?.permanent || false,
+    });
+
+    console.log('✅ SDK upload successful!');
+    console.log('📄 SDK Result:', result);
+
+    const blobId = result.blobId || result.blob_id;
+    
+    if (!blobId) {
+      throw new Error('No blobId received from SDK response');
+    }
+    
+    const downloadUrl = `${WALRUS_CONFIG.aggregator}/v1/blobs/${blobId}`;
+
+    return {
+      status: result.isNew ? 'success' : 'alreadyExists',
+      blobId: blobId,
+      url: downloadUrl,
+      size: uint8Data.length,
+    };
+  } catch (error) {
+    console.error('❌ SDK upload failed:', error);
+    throw error;
+  }
 };
 
 
@@ -118,21 +330,101 @@ const uploadViaHttpApi = async (
   }
 };
 
-// Use HTTP API directly (SDK temporarily disabled due to WASM issues)
+// Generic retry wrapper
+const withRetry = async <T>(
+  fn: () => Promise<T>,
+  context: string,
+  retryConfig = RETRY_CONFIG
+): Promise<T> => {
+  let lastError: Error | null = null;
+  
+  for (let attempt = 1; attempt <= retryConfig.maxAttempts; attempt++) {
+    try {
+      console.log(`🔄 ${context} (attempt ${attempt}/${retryConfig.maxAttempts})...`);
+      return await fn();
+    } catch (error) {
+      lastError = error instanceof Error ? error : new Error(String(error));
+      console.error(`❌ ${context} attempt ${attempt} failed:`, lastError.message);
+      
+      if (attempt < retryConfig.maxAttempts) {
+        const delay = Math.min(
+          retryConfig.initialDelay * Math.pow(retryConfig.backoffMultiplier, attempt - 1),
+          retryConfig.maxDelay
+        );
+        console.log(`⏳ Retrying in ${delay}ms...`);
+        await sleep(delay);
+      }
+    }
+  }
+  
+  throw lastError || new Error(`${context} failed after ${retryConfig.maxAttempts} attempts`);
+};
+
+// Main upload function with SDK-first, HTTP API fallback approach and retry logic
 export const uploadToWalrus = async (
   data: Uint8Array | Blob | File,
   options?: WalrusUploadOptions
 ): Promise<WalrusUploadResult> => {
-  // Always use HTTP API for now - SDK has chunk loading issues
-  console.log('📤 HTTP API를 통한 Walrus 업로드...');
-  return await uploadViaHttpApi(data, options);
+  console.log('📤 Starting Walrus upload with intelligent fallback...');
+  
+  // Try SDK first if available
+  const sdkReady = await initializeWalrusSDK();
+  
+  if (sdkReady) {
+    try {
+      console.log('🔧 Attempting SDK upload (preferred method)...');
+      return await withRetry(
+        () => uploadViaSDK(data, options),
+        'SDK upload',
+        { ...RETRY_CONFIG, maxAttempts: 2 } // Fewer retries for SDK before fallback
+      );
+    } catch (sdkError) {
+      console.warn('⚠️ All SDK upload attempts failed, falling back to HTTP API:', sdkError);
+      // Fall through to HTTP API
+    }
+  }
+  
+  // Fallback to HTTP API with retry
+  console.log('🔄 Using HTTP API fallback with retry logic...');
+  try {
+    return await withRetry(
+      () => uploadViaHttpApi(data, options),
+      'HTTP API upload'
+    );
+  } catch (error) {
+    // Final fallback: return error result instead of throwing
+    console.error('❌ All upload methods failed:', error);
+    return {
+      status: 'error',
+      blobId: '',
+      error: `All upload attempts failed: ${error instanceof Error ? error.message : String(error)}`
+    };
+  }
 };
 
-// Read function using HTTP API directly
-export const readFromWalrus = async (blobId: string): Promise<Uint8Array> => {
-  // Use HTTP API directly - SDK has chunk loading issues
+// SDK read implementation
+const readViaSDK = async (blobId: string): Promise<Uint8Array> => {
   try {
-    console.log('📥 HTTP API read 시도:', blobId);
+    console.log('📥 Using Walrus SDK for read...');
+    
+    if (!sdkInstance) {
+      throw new Error('SDK not initialized');
+    }
+
+    const data = await sdkInstance.read(blobId);
+    
+    console.log('✅ SDK read successful, size:', data.length);
+    return data;
+  } catch (error) {
+    console.error('❌ SDK read failed:', error);
+    throw error;
+  }
+};
+
+// HTTP API read implementation
+const readViaHttpApi = async (blobId: string): Promise<Uint8Array> => {
+  try {
+    console.log('📥 Using HTTP API for read...');
     
     const response = await fetch(`${WALRUS_CONFIG.aggregator}/v1/blobs/${blobId}`);
     
@@ -144,12 +436,46 @@ export const readFromWalrus = async (blobId: string): Promise<Uint8Array> => {
     const arrayBuffer = await response.arrayBuffer();
     const data = new Uint8Array(arrayBuffer);
     
-    console.log('✅ HTTP API read 완료, 크기:', data.length);
+    console.log('✅ HTTP API read successful, size:', data.length);
     return data;
   } catch (error) {
-    console.error('❌ HTTP API read 실패:', error);
-    throw new Error(`Walrus read 실패: ${error instanceof Error ? error.message : String(error)}`);
+    console.error('❌ HTTP API read failed:', error);
+    throw error;
   }
+};
+
+// Main read function with SDK-first, HTTP API fallback approach and retry logic
+export const readFromWalrus = async (blobId: string): Promise<Uint8Array> => {
+  console.log('📥 Starting Walrus read with intelligent fallback for blob:', blobId);
+  
+  // Validate blobId
+  if (!blobId || blobId.trim() === '') {
+    throw new Error('Invalid blobId: empty or null');
+  }
+  
+  // Try SDK first if available
+  const sdkReady = await initializeWalrusSDK();
+  
+  if (sdkReady) {
+    try {
+      console.log('🔧 Attempting SDK read (preferred method)...');
+      return await withRetry(
+        () => readViaSDK(blobId),
+        'SDK read',
+        { ...RETRY_CONFIG, maxAttempts: 2 } // Fewer retries for SDK before fallback
+      );
+    } catch (sdkError) {
+      console.warn('⚠️ All SDK read attempts failed, falling back to HTTP API:', sdkError);
+      // Fall through to HTTP API
+    }
+  }
+  
+  // Fallback to HTTP API with retry
+  console.log('🔄 Using HTTP API fallback for read with retry logic...');
+  return await withRetry(
+    () => readViaHttpApi(blobId),
+    'HTTP API read'
+  );
 };
 
 // Docker image export and upload functions

@@ -21,14 +21,10 @@ const { networkConfig } = createNetworkConfig({
 export default function WalletProviderWrapper({ children }: WalletProviderWrapperProps) {
   return (
     <QueryClientProvider client={queryClient}>
-      <SuiClientProvider networks={networkConfig} defaultNetwork="devnet">
+      <SuiClientProvider networks={networkConfig} defaultNetwork="testnet">
         <WalletProvider
           autoConnect={false}
           preferredWallets={['Slush Wallet', 'Suiet']}
-          requiredFeatures={['sui:signAndExecuteTransactionBlock']}
-          stashedWallet={{
-            name: 'Stashed Wallet',
-          }}
         >
           {children}
         </WalletProvider>
