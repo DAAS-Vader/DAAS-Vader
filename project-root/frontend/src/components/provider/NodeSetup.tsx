@@ -22,6 +22,7 @@ import { Badge } from '@/components/ui/badge'
 import { Progress } from '@/components/ui/progress'
 import { WalletInfo } from '@/types'
 // Removed nodeRegistryService import to eliminate console errors
+import { nodeRegistryService } from '@/services/nodeRegistry'
 import { REGIONS } from '@/contracts/types'
 
 interface ResourceConfig {
