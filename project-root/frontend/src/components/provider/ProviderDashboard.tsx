@@ -10,7 +10,6 @@ import { ConnectButton, useCurrentAccount } from '@mysten/dapp-kit'
 import TaskSelector from '@/components/tasks/TaskSelector'
 import NodeSetup from './NodeSetup'
 import { WalletInfo, Task } from '@/types'
-import { nodeRegistryService } from '@/services/nodeRegistry'
 import StakingPoolStats from '../StakingPoolStats'
 
 type Step = 'wallet' | 'node' | 'tasks' | 'deploy'

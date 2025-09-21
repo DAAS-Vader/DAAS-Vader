@@ -21,7 +21,7 @@ import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Progress } from '@/components/ui/progress'
 import { WalletInfo } from '@/types'
-import { nodeRegistryService } from '@/services/nodeRegistry'
+// Removed nodeRegistryService import to eliminate console errors
 import { REGIONS } from '@/contracts/types'
 
 interface ResourceConfig {
@@ -69,6 +69,7 @@ const NodeSetup: React.FC<NodeSetupProps> = ({ onNodeCreate, onCancel, walletInf
     setError(null)
 
     try {
+      console.log(`🔑 Node provider address: ${walletInfo.address}`)
       console.log(`🔑 Node provider address: ${walletInfo.address}`)
 
       // Register node using actual contract service
